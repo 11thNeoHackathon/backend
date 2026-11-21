@@ -1,30 +1,28 @@
 package com.cheongchun.family;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.jayway.jsonpath.JsonPath;
-import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class FamilyFlowTest {
-    private static final EmbeddedPostgres database = startPostgres();
     private static final HttpClient http = HttpClient.newHttpClient();
 
     @LocalServerPort int port;
@@ -32,14 +30,9 @@ class FamilyFlowTest {
 
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> database.getJdbcUrl("postgres", "postgres"));
-        registry.add("spring.datasource.username", () -> "postgres");
-        registry.add("spring.datasource.password", () -> "");
-    }
-
-    @AfterAll
-    static void stopPostgres() throws IOException {
-        database.close();
+        registry.add("spring.datasource.url", () -> testVariable("TEST_DB_URL"));
+        registry.add("spring.datasource.username", () -> testVariable("TEST_DB_USERNAME"));
+        registry.add("spring.datasource.password", () -> testVariable("TEST_DB_PASSWORD"));
     }
 
     @Test
@@ -107,7 +100,7 @@ class FamilyFlowTest {
         assertThat(get("/invitations/nonexistent", null).statusCode()).isEqualTo(404);
         String creator = cookie(post("/participants", null, "{\"displayName\":\"초대자\"}"));
         String code = value(createBook(creator, "가족"), "$.data.invitation.code");
-        jdbc.sql("UPDATE book_invitation SET expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second' WHERE code = :code")
+        jdbc.sql("UPDATE book_invitation SET expires_at = CURRENT_TIMESTAMP(6) - INTERVAL 1 SECOND WHERE code = :code")
                 .param("code", code).update();
         var response = post("/invitations/" + code + "/accept", null, "{\"displayName\":\"상대\"}");
         assertThat(response.statusCode()).isEqualTo(409);
@@ -125,6 +118,44 @@ class FamilyFlowTest {
                 HttpResponse.BodyHandlers.ofString());
         assertThat(contract.statusCode()).isEqualTo(200);
         assertThat(contract.body()).contains("/api/v1/invitations/{code}/accept:");
+    }
+
+    @Test
+    void mysqlPreservesSeatAndCrossBookConstraintsAndCodeCase() throws Exception {
+        var creator = post("/participants", null, "{\"displayName\":\"초대자\"}");
+        long creatorId = ((Number) value(creator, "$.data.participantId")).longValue();
+        var outsider = post("/participants", null, "{\"displayName\":\"다른 참여자\"}");
+        long outsiderId = ((Number) value(outsider, "$.data.participantId")).longValue();
+        var created = createBook(cookie(creator), "가족");
+        long bookId = ((Number) value(created, "$.data.book.bookId")).longValue();
+
+        assertMysqlError(3819, () -> insertSeat(bookId, outsiderId, 3));
+        assertMysqlError(1062, () -> insertSeat(bookId, outsiderId, 1));
+        assertMysqlError(1062, () -> insertSeat(bookId, creatorId, 2));
+        assertMysqlError(1452, () -> jdbc.sql("""
+                UPDATE book_invitation SET accepted_by = :outsider, accepted_at = CURRENT_TIMESTAMP(6)
+                WHERE book_id = :bookId
+                """).param("outsider", outsiderId).param("bookId", bookId).update());
+
+        String original = value(created, "$.data.invitation.code");
+        String tail = original.substring(2);
+        jdbc.sql("UPDATE book_invitation SET code = :code WHERE book_id = :bookId")
+                .param("code", "Aa" + tail).param("bookId", bookId).update();
+        assertThat(get("/invitations/Aa" + tail, null).statusCode()).isEqualTo(200);
+        assertThat(get("/invitations/aA" + tail, null).statusCode()).isEqualTo(404);
+    }
+
+    private void insertSeat(long bookId, long participantId, int slotNo) {
+        jdbc.sql("""
+                INSERT INTO book_participant (book_id, participant_id, slot_no, counterpart_label)
+                VALUES (:bookId, :participantId, :slotNo, '가족')
+                """).param("bookId", bookId).param("participantId", participantId).param("slotNo", slotNo).update();
+    }
+
+    private static void assertMysqlError(int errorCode, Runnable statement) {
+        assertThatThrownBy(statement::run).satisfies(error ->
+                assertThat(NestedExceptionUtils.getMostSpecificCause(error))
+                        .isInstanceOfSatisfying(SQLException.class, sql -> assertThat(sql.getErrorCode()).isEqualTo(errorCode)));
     }
 
     private HttpResponse<String> createBook(String cookie, String label) throws Exception {
@@ -162,11 +193,11 @@ class FamilyFlowTest {
         return response.headers().firstValue("Set-Cookie").orElseThrow().split(";", 2)[0];
     }
 
-    private static EmbeddedPostgres startPostgres() {
-        try {
-            return EmbeddedPostgres.start();
-        } catch (IOException error) {
-            throw new UncheckedIOException(error);
+    private static String testVariable(String name) {
+        String value = System.getenv(name);
+        if (value == null || (!name.equals("TEST_DB_PASSWORD") && value.isBlank())) {
+            throw new IllegalStateException("Set " + name + " for an isolated MySQL integration-test database");
         }
+        return value;
     }
 }

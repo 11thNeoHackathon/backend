@@ -5,11 +5,13 @@ import static com.cheongchun.family.FamilyModels.*;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -41,10 +43,12 @@ class FamilyStore {
     }
 
     Participant createParticipant(String displayName, Integer birthYear) {
-        long id = jdbc.sql("""
-                INSERT INTO participant (display_name, birth_year) VALUES (:displayName, :birthYear) RETURNING id
+        var key = new GeneratedKeyHolder();
+        jdbc.sql("""
+                INSERT INTO participant (display_name, birth_year) VALUES (:displayName, :birthYear)
                 """).param("displayName", displayName).param("birthYear", birthYear)
-                .query(Long.class).single();
+                .update(key, "id");
+        long id = Objects.requireNonNull(key.getKey(), "Participant ID was not generated").longValue();
         return new Participant(id, displayName, birthYear);
     }
 
@@ -57,8 +61,10 @@ class FamilyStore {
     }
 
     long createBook(long creator, String title) {
-        return jdbc.sql("INSERT INTO book (created_by, title) VALUES (:creator, :title) RETURNING id")
-                .param("creator", creator).param("title", title).query(Long.class).single();
+        var key = new GeneratedKeyHolder();
+        jdbc.sql("INSERT INTO book (created_by, title) VALUES (:creator, :title)")
+                .param("creator", creator).param("title", title).update(key, "id");
+        return Objects.requireNonNull(key.getKey(), "Book ID was not generated").longValue();
     }
 
     void addMember(long bookId, long participantId, int slotNo, String counterpartLabel) {
@@ -95,7 +101,7 @@ class FamilyStore {
                 JOIN book b ON b.id = i.book_id
                 JOIN participant p ON p.id = i.issued_by
                 WHERE i.code = :code
-                """ + (lockBook ? " FOR UPDATE OF b" : ""))
+                """ + (lockBook ? " FOR UPDATE OF b, i" : ""))
                 .param("code", code).query((row, index) -> new Invite(
                         row.getLong("id"), row.getLong("book_id"), row.getLong("issued_by"),
                         row.getObject("accepted_by", Long.class), instant(row, "expires_at"),
@@ -115,12 +121,12 @@ class FamilyStore {
                 row.getString("counterpart_label"), row.getString("counterpart_name"));
     }
 
-    private static OffsetDateTime utc(Instant instant) {
-        return instant.atOffset(ZoneOffset.UTC);
+    private static LocalDateTime utc(Instant instant) {
+        return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
     private static Instant instant(ResultSet row, String column) throws SQLException {
-        OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
-        return value == null ? null : value.toInstant();
+        LocalDateTime value = row.getObject(column, LocalDateTime.class);
+        return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
 }

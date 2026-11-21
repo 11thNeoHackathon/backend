@@ -94,9 +94,8 @@ class FamilyService {
 
     @Transactional
     public Reply<BookView> acceptInvite(String token, String code, AcceptInput input) {
-        // Acquire the book lock first, then read the invitation again using a fresh statement snapshot.
-        invite(code, true);
-        Invite invite = invite(code, false);
+        // A locking read sees the current invitation after waiting for a concurrent accept.
+        Invite invite = invite(code, true);
         Optional<Participant> existing = participant(token);
         if (existing.filter(p -> p.participantId() == invite.issuedBy()).isPresent()) {
             throw FamilyException.conflict("SELF_INVITATION", "내가 만든 초대는 수락할 수 없어요.");
