@@ -1,8 +1,11 @@
 openapi: 3.0.3
 info:
   title: 청춘교환 서버 1 API
-  version: 1.0.0
-  description: 가입 없이 기기 쿠키로 참여자를 식별하고, 초대 링크로 두 사람의 교환일기를 연결한다.
+  version: 1.1.0
+  description: |
+    가입 없이 기기 쿠키로 참여자를 식별하고, 초대 링크로 두 사람의 교환일기를 연결한다.
+    성공은 success=true, data=응답 본문, error=null이다. 실패는 success=false, data=null,
+    error에 code와 message를 포함한다. 책 밖의 요청에는 책의 존재를 노출하지 않고 404를 반환한다.
 servers:
   - url: /
 paths:
@@ -25,12 +28,12 @@ paths:
               description: 이후 요청에 브라우저가 보내는 HttpOnly 세션 쿠키
           content:
             application/json:
-              example: {data: {participantId: 1, displayName: 지우, birthYear: 2003}}
+              example: {success: true, data: {participantId: 1, displayName: 지우, birthYear: 2003}, error: null}
         '200':
           description: 이미 식별된 참여자 반환
           content:
             application/json:
-              example: {data: {participantId: 1, displayName: 지우, birthYear: 2003}}
+              example: {success: true, data: {participantId: 1, displayName: 지우, birthYear: 2003}, error: null}
         '400': {$ref: '#/components/responses/BadInput'}
         '500': {$ref: '#/components/responses/InternalError'}
   /api/v1/participants/me:
@@ -42,7 +45,7 @@ paths:
           description: 내 프로필
           content:
             application/json:
-              example: {data: {participantId: 1, displayName: 지우, birthYear: 2003}}
+              example: {success: true, data: {participantId: 1, displayName: 지우, birthYear: 2003}, error: null}
         '401': {$ref: '#/components/responses/SessionRequired'}
         '500': {$ref: '#/components/responses/InternalError'}
   /api/v1/books:
@@ -66,9 +69,11 @@ paths:
           content:
             application/json:
               example:
+                success: true
                 data:
                   book: {bookId: 1, title: 청춘 교환일기, status: INVITE_PENDING, mySlotNo: 1, counterpartLabel: 엄마, counterpartName: null}
                   invitation: {code: d3JsR9aQ5tY8zK0uE4mB6nV2xL1sP7Gh, inviteUrl: 'http://localhost:8080/invite/d3JsR9aQ5tY8zK0uE4mB6nV2xL1sP7Gh', expiresAt: '2026-11-22T00:00:00Z'}
+                error: null
         '400': {$ref: '#/components/responses/BadInput'}
         '401': {$ref: '#/components/responses/SessionRequired'}
         '500': {$ref: '#/components/responses/InternalError'}
@@ -81,8 +86,10 @@ paths:
           content:
             application/json:
               example:
+                success: true
                 data:
                   - {bookId: 1, title: 청춘 교환일기, status: ACTIVE, mySlotNo: 1, counterpartLabel: 엄마, counterpartName: 은주}
+                error: null
         '401': {$ref: '#/components/responses/SessionRequired'}
         '500': {$ref: '#/components/responses/InternalError'}
   /api/v1/books/{bookId}:
@@ -100,14 +107,14 @@ paths:
           description: 책의 연결 상태와 상대 정보
           content:
             application/json:
-              example: {data: {bookId: 1, title: 청춘 교환일기, status: ACTIVE, mySlotNo: 1, counterpartLabel: 엄마, counterpartName: 은주}}
+              example: {success: true, data: {bookId: 1, title: 청춘 교환일기, status: ACTIVE, mySlotNo: 1, counterpartLabel: 엄마, counterpartName: 은주}, error: null}
         '400': {$ref: '#/components/responses/BadInput'}
         '401': {$ref: '#/components/responses/SessionRequired'}
         '404':
           description: 없는 책 또는 내 책이 아님
           content:
             application/json:
-              example: {code: BOOK_NOT_FOUND, message: 책을 찾을 수 없어요.}
+              example: {success: false, data: null, error: {code: BOOK_NOT_FOUND, message: 책을 찾을 수 없어요.}}
         '500': {$ref: '#/components/responses/InternalError'}
   /api/v1/invitations/{code}:
     parameters:
@@ -121,9 +128,9 @@ paths:
             application/json:
               examples:
                 available:
-                  value: {data: {status: AVAILABLE, inviterName: 지우, bookTitle: 청춘 교환일기, expiresAt: '2026-11-22T00:00:00Z', bookId: null}}
+                  value: {success: true, data: {status: AVAILABLE, inviterName: 지우, bookTitle: 청춘 교환일기, expiresAt: '2026-11-22T00:00:00Z', bookId: null}, error: null}
                 linked:
-                  value: {data: {status: LINKED, inviterName: 지우, bookTitle: 청춘 교환일기, expiresAt: '2026-11-22T00:00:00Z', bookId: 1}}
+                  value: {success: true, data: {status: LINKED, inviterName: 지우, bookTitle: 청춘 교환일기, expiresAt: '2026-11-22T00:00:00Z', bookId: 1}, error: null}
         '404': {$ref: '#/components/responses/InviteNotFound'}
         '409': {$ref: '#/components/responses/InviteConflict'}
         '500': {$ref: '#/components/responses/InternalError'}
@@ -149,12 +156,12 @@ paths:
           description: 두 번째 참여자 연결. 새 기기에는 기기 쿠키도 발급한다.
           content:
             application/json:
-              example: {data: {bookId: 1, title: 청춘 교환일기, status: ACTIVE, mySlotNo: 2, counterpartLabel: 지우, counterpartName: 지우}}
+              example: {success: true, data: {bookId: 1, title: 청춘 교환일기, status: ACTIVE, mySlotNo: 2, counterpartLabel: 지우, counterpartName: 지우}, error: null}
         '200':
           description: 이미 수락한 같은 기기의 재요청
           content:
             application/json:
-              example: {data: {bookId: 1, title: 청춘 교환일기, status: ACTIVE, mySlotNo: 2, counterpartLabel: 지우, counterpartName: 지우}}
+              example: {success: true, data: {bookId: 1, title: 청춘 교환일기, status: ACTIVE, mySlotNo: 2, counterpartLabel: 지우, counterpartName: 지우}, error: null}
         '400': {$ref: '#/components/responses/BadInput'}
         '404': {$ref: '#/components/responses/InviteNotFound'}
         '409': {$ref: '#/components/responses/InviteConflict'}
@@ -185,32 +192,32 @@ components:
       description: 필수 값 누락 또는 입력 형식 오류
       content:
         application/json:
-          example: {code: VALIDATION_ERROR, message: 이름을 입력해 주세요.}
+          example: {success: false, data: null, error: {code: INVALID_REQUEST, message: 닉네임 값을 입력해 주세요.}}
     SessionRequired:
       description: 유효한 기기 세션이 없음
       content:
         application/json:
-          example: {code: SESSION_REQUIRED, message: 먼저 닉네임을 입력해 주세요.}
+          example: {success: false, data: null, error: {code: SESSION_REQUIRED, message: 먼저 닉네임을 입력해 주세요.}}
     InviteNotFound:
       description: 없는 초대 코드
       content:
         application/json:
-          example: {code: INVITATION_NOT_FOUND, message: 초대 링크를 찾을 수 없어요.}
+          example: {success: false, data: null, error: {code: INVITATION_NOT_FOUND, message: 초대 링크를 찾을 수 없어요.}}
     InviteConflict:
       description: 사용·만료·취소된 초대 또는 본인 초대 수락
       content:
         application/json:
           examples:
             used:
-              value: {code: INVITATION_USED, message: 이미 다른 기기가 이 초대를 수락했어요.}
+              value: {success: false, data: null, error: {code: INVITATION_USED, message: 이미 다른 기기가 이 초대를 수락했어요.}}
             expired:
-              value: {code: INVITATION_EXPIRED, message: 초대 링크가 만료됐어요.}
+              value: {success: false, data: null, error: {code: INVITATION_EXPIRED, message: 초대 링크가 만료됐어요.}}
             selfAccept:
-              value: {code: SELF_INVITATION, message: 내가 만든 초대는 수락할 수 없어요.}
+              value: {success: false, data: null, error: {code: SELF_INVITATION, message: 내가 만든 초대는 수락할 수 없어요.}}
             revoked:
-              value: {code: INVITATION_REVOKED, message: 사용할 수 없는 초대 링크예요.}
+              value: {success: false, data: null, error: {code: INVITATION_REVOKED, message: 사용할 수 없는 초대 링크예요.}}
     InternalError:
       description: 예상하지 못한 서버 오류
       content:
         application/json:
-          example: {code: INTERNAL_ERROR, message: 요청을 처리하지 못했어요.}
+          example: {success: false, data: null, error: {code: INTERNAL_ERROR, message: 요청을 처리하지 못했어요.}}
