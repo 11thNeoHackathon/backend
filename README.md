@@ -14,6 +14,8 @@
 
 ## 서버 1 실행
 
+로컬·배포 프로필과 제출 URL 확인 순서는 [환경별 설정과 제출 링크](docs/환경별%20설정과%20제출%20링크.md)를 참고합니다.
+
 Java 21과 MySQL 8.0.16 이상이 필요합니다. 비어 있는 `hackathon` 데이터베이스에서 앱이 시작되면 Flyway가 확정 ERD의 서버 1 테이블 다섯 개를 생성합니다. 적용한 테이블은 `participant`, `participant_session`, `book`, `book_participant`, `book_invitation`입니다. `book`의 상태는 책의 두 자리 연결 여부로 계산합니다. 생성·만료 시각은 UTC로 저장합니다.
 
 | 환경 변수 | 설정 |

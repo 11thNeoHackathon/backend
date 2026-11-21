@@ -1,0 +1,4 @@
+app:
+  invite-base-url: ${INVITE_BASE_URL}
+  frontend-origin: ${FRONTEND_ORIGIN:}
+  secure-cookie: true
