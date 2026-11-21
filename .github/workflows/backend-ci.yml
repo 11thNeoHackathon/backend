@@ -38,7 +38,9 @@ jobs:
           java-version: '21'
           cache: gradle
       - name: Test EC2 release and rollback
-        run: bash deploy/ec2/test-release.sh
+        run: |
+          bash -n deploy/ec2/ssh-deploy.sh
+          bash deploy/ec2/test-release.sh
       - name: Test and build with MySQL
         env:
           TEST_DB_URL: 'jdbc:mysql://127.0.0.1:${{ job.services.mysql.ports[3306] }}/hackathon_test?sslMode=DISABLED&allowPublicKeyRetrieval=true'
@@ -71,9 +73,12 @@ jobs:
   deploy-ec2:
     needs: mysql-test-and-build
     if: github.ref == 'refs/heads/main' && vars.EC2_DEPLOY_ENABLED == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: production
+    permissions:
+      contents: read
+      id-token: write
     concurrency:
       group: hackathon-backend-production
       cancel-in-progress: false
@@ -85,19 +90,44 @@ jobs:
         with:
           name: hackathon-backend
           path: ${{ runner.temp }}/hackathon-release
-      - name: Deploy the tested main revision
+      - name: Check deployment revision and SSM configuration
+        id: preflight
         env:
           GH_TOKEN: ${{ github.token }}
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+          EC2_AWS_REGION: ${{ vars.EC2_AWS_REGION }}
+          EC2_AWS_ROLE_ARN: ${{ vars.EC2_AWS_ROLE_ARN }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
         shell: bash
         run: |
           set -euo pipefail
           current_main=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
           if [[ $current_main != "$GITHUB_SHA" ]]; then
-            echo 'A newer revision is on main; the older artifact will not be deployed.'
+            echo '::notice::A newer revision is on main. Deployment skipped.'
             exit 0
           fi
-          bash deploy/ec2/ssh-deploy.sh "$RUNNER_TEMP/hackathon-release" "$GITHUB_SHA"
+          if [[ -z $EC2_AWS_REGION || -z $EC2_AWS_ROLE_ARN || ! $EC2_INSTANCE_ID =~ ^i-([0-9a-f]{8}|[0-9a-f]{17})$ ]]; then
+            echo '::error::Set EC2_AWS_REGION, EC2_AWS_ROLE_ARN, and EC2_INSTANCE_ID in the production environment.'
+            exit 1
+          fi
+          aws --version
+          session-manager-plugin --version
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+      - name: Assume the deployment role using OIDC
+        if: steps.preflight.outputs.ready == 'true'
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: ${{ vars.EC2_AWS_REGION }}
+          role-to-assume: ${{ vars.EC2_AWS_ROLE_ARN }}
+          role-session-name: hackathon-${{ github.run_id }}-${{ github.run_attempt }}
+          role-duration-seconds: 900
+      - name: Deploy the tested main revision
+        if: steps.preflight.outputs.ready == 'true'
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+          EC2_HEALTH_BASE_URL: ${{ vars.EC2_HEALTH_BASE_URL }}
+        shell: bash
+        run: bash deploy/ec2/ssh-deploy.sh "$RUNNER_TEMP/hackathon-release" "$GITHUB_SHA"

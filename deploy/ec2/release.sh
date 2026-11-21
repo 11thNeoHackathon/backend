@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-incoming=${1:?usage: release.sh <artifact directory> <commit SHA>}
+incoming=${1:?usage: release.sh <artifact directory> <commit SHA> [Nginx base URL]}
 revision=${2:?commit SHA required}
+nginx_url=${3:-http://127.0.0.1}
 app_dir=${DEPLOY_APP_DIR:-/home/ubuntu}
 app_jar="$app_dir/app.jar"
 backup_jar="$app_dir/.app.jar.previous"
-attempts=${DEPLOY_HEALTH_ATTEMPTS:-45}
+health_timeout=${DEPLOY_HEALTH_TIMEOUT_SECONDS:-90}
 service=hackathon.service
 
 [[ $revision =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid commit SHA.' >&2; exit 1; }
+[[ $nginx_url =~ ^https?://[a-zA-Z0-9][a-zA-Z0-9.-]*(:[0-9]{1,5})?$ ]] || {
+  echo 'Expected a valid EC2_HEALTH_BASE_URL origin without a path or trailing slash.' >&2
+  exit 1
+}
 (cd "$incoming" && sha256sum --check --status app.jar.sha256) || { echo 'Artifact checksum did not match.' >&2; exit 1; }
 
 exec 9>"$app_dir/.hackathon-deploy.lock"
@@ -22,7 +27,7 @@ fi
 
 staging=$(mktemp -d "$app_dir/.hackathon-deploy.XXXXXXXX")
 cleanup() {
-  rm -f -- "$staging/next.jar" "$staging/previous.jar"
+  rm -f -- "$staging/next.jar" "$staging/previous.jar" "$staging/session-response.json"
   rmdir -- "$staging"
 }
 trap cleanup EXIT
@@ -34,17 +39,26 @@ if [[ $(stat -c '%u:%g' "$app_jar") != $(stat -c '%u:%g' "$staging/next.jar") ]]
   sudo -n /usr/bin/chown --reference="$app_jar" "$staging/previous.jar" "$staging/next.jar"
 fi
 
+http_status_is() {
+  local expected=$1 status
+  shift
+  status=$(curl -q --silent --noproxy '*' --max-time 3 --write-out '%{http_code}' "$@") && [[ $status == "$expected" ]]
+}
+
 wait_for_health() {
-  local attempt
-  for ((attempt = 1; attempt <= attempts; attempt++)); do
+  local deadline=$((SECONDS + health_timeout))
+  local -a nginx_options=(--location --max-redirs 3 --proto-redir '=https' --connect-to '::127.0.0.1:')
+  while :; do
     if systemctl is-active --quiet "$service" \
-        && [[ $(curl --silent --max-time 3 --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/openapi/server1.yaml) == 200 ]] \
-        && [[ $(curl --silent --max-time 3 --output /dev/null --write-out '%{http_code}' http://127.0.0.1/openapi/server1.yaml) == 200 ]]; then
+        && http_status_is 200 --output /dev/null http://127.0.0.1:8080/openapi/server1.yaml \
+        && http_status_is 200 "${nginx_options[@]}" --output /dev/null "$nginx_url/openapi/server1.yaml" \
+        && http_status_is 401 "${nginx_options[@]}" --output "$staging/session-response.json" "$nginx_url/api/v1/participants/me" \
+        && grep -Eq '"code"[[:space:]]*:[[:space:]]*"SESSION_REQUIRED"' "$staging/session-response.json"; then
       return 0
     fi
-    if (( attempt < attempts )); then sleep 2; fi
+    if (( SECONDS >= deadline )); then return 1; fi
+    sleep 2
   done
-  return 1
 }
 
 mv -fT -- "$staging/previous.jar" "$backup_jar"
