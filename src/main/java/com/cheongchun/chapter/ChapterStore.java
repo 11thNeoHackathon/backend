@@ -73,6 +73,30 @@ class ChapterStore {
                 """).param("chapterId", chapterId).param("authorId", authorId).update();
     }
 
+    List<Reflection> reflections(long chapterId) {
+        return jdbc.sql("""
+                SELECT id, participant_id, content, completed_at, updated_at
+                FROM reflection WHERE chapter_id = :id ORDER BY id
+                """).param("id", chapterId).query((row, index) -> new Reflection(row.getLong("id"),
+                        row.getLong("participant_id"), row.getString("content"),
+                        instant(row, "completed_at"), instant(row, "updated_at"))).list();
+    }
+
+    void writeReflection(long chapterId, long participantId, String content) {
+        jdbc.sql("""
+                INSERT INTO reflection(chapter_id, participant_id, content)
+                VALUES (:chapterId, :participantId, :content)
+                ON CONFLICT(chapter_id, participant_id) DO UPDATE
+                SET content = EXCLUDED.content, updated_at = CURRENT_TIMESTAMP
+                """).param("chapterId", chapterId).param("participantId", participantId)
+                .param("content", content).update();
+    }
+
+    void open(long chapterId) {
+        jdbc.sql("UPDATE chapter SET opened_at = CURRENT_TIMESTAMP WHERE id = :id AND opened_at IS NULL")
+                .param("id", chapterId).update();
+    }
+
     void delete(long chapterId) {
         jdbc.sql("DELETE FROM chapter WHERE id = :id").param("id", chapterId).update();
     }

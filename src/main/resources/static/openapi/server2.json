@@ -3,7 +3,7 @@
   "info": {
     "title": "청춘교환 공유 챕터와 이야기",
     "version": "0.1.0",
-    "description": "## 먼저 알아둘 내용\n\n- 책 하나는 두 사람이 공유합니다. 챕터도 공유하지만 이야기는 각자 작성합니다.\n- `bookId`는 가족 연결 API의 책 생성·조회 응답에서 가져옵니다.\n- `chapterId`는 챕터 목록 또는 생성 응답의 `id`입니다.\n- 모든 API는 `participant_session` 쿠키로 현재 참여자를 확인합니다. 먼저 **가족 연결** 문서에서 참여자를 시작해 주세요.\n- Swagger의 Authorize에 쿠키를 직접 입력하는 방식 대신, 같은 브라우저에서 참여자 시작 API를 호출해 쿠키를 발급받습니다.\n\n## Swagger에서 따라 해보기\n\n1. **가족 연결** 문서에서 참여자 시작 → 책 생성 → 다른 브라우저 프로필에서 초대 수락을 진행합니다.\n2. 이 문서의 **01 챕터 목록**에서 기본 ‘초등학생 시절’ 챕터의 `id`를 확인합니다.\n3. **04 내 이야기 저장**으로 제목·내용·미션을 작성합니다.\n4. **05 내 이야기 작성 완료**를 호출합니다. 상대도 같은 챕터에서 자기 이야기를 저장하고 완료합니다.\n5. **03 챕터 상세**에서 `nextAction=DO_MISSION`과 `receivedMission`을 확인합니다.\n\n두 사람을 시험하려면 일반 창과 시크릿 창 또는 별도 브라우저 프로필을 사용하세요. 같은 프로필의 탭들은 참여자 쿠키를 공유합니다. 로컬 HTTP에서는 IntelliJ의 **Local** 구성으로 실행합니다.\n\n## 다음 화면을 결정하는 값\n\n| nextAction | 의미 | 화면 동작 |\n| --- | --- | --- |\n| WRITE_STORY | 내 이야기 작성 전 또는 임시저장 중 | 이야기 작성 화면 열기 |\n| WAIT | 나는 완료했고 상대는 작성 중 | 대기 화면 표시 |\n| DO_MISSION | 두 사람 모두 이야기 작성 완료 | 상대 미션 표시 |\n| READ | 챕터 열림 | 이야기와 결과 읽기 |\n\n**현재 구현 범위**는 챕터 추가·목록·상세·빈 챕터 삭제와 이야기 저장·작성 완료입니다.\n후기 제출·자동 열림·읽음·푸시·이야기 삭제는 후속 구현입니다. 따라서 현재 흐름에서는 `READ`로 전환되지 않으며 상대 이야기 본문은 계속 숨겨집니다.\n\n## 저장과 완료의 차이\n\n- 저장은 작성 도중 여러 번 호출할 수 있고 빈 값도 허용합니다.\n- 작성 완료는 제목·내용·미션이 모두 있어야 합니다.\n- 상대 이야기는 챕터가 열릴 때 공개됩니다. 이야기 작성 완료만으로 본문이 공개되지는 않습니다.\n- 응답은 `success / data / error` 형식을 사용합니다. 실패 이유는 `error.code`와 `error.message`에서 확인하세요."
+    "description": "## 먼저 알아둘 내용\n\n- 책 하나는 두 사람이 공유합니다. 챕터도 공유하지만 이야기는 각자 작성합니다.\n- `bookId`는 가족 연결 API의 책 생성·조회 응답에서 가져옵니다.\n- `chapterId`는 챕터 목록 또는 생성 응답의 `id`입니다.\n- 모든 API는 `participant_session` 쿠키로 현재 참여자를 확인합니다. 먼저 **가족 연결** 문서에서 참여자를 시작해 주세요.\n- Swagger의 Authorize에 쿠키를 직접 입력하는 방식 대신, 같은 브라우저에서 참여자 시작 API를 호출해 쿠키를 발급받습니다.\n\n## Swagger에서 따라 해보기\n\n1. **가족 연결** 문서에서 참여자 시작 → 책 생성 → 다른 브라우저 프로필에서 초대 수락을 진행합니다.\n2. 이 문서의 **01 챕터 목록**에서 기본 ‘초등학생 시절’ 챕터의 `id`를 확인합니다.\n3. **04 내 이야기 저장**으로 제목·내용·미션을 작성합니다.\n4. **05 내 이야기 작성 완료**를 호출합니다. 상대도 같은 챕터에서 자기 이야기를 저장하고 완료합니다.\n5. **03 챕터 상세**에서 `nextAction=DO_MISSION`과 `receivedMission`을 확인합니다.\n6. 양쪽에서 **06 미션 감상 제출·수정**을 호출합니다. 첫 제출 뒤에는 상대에게 완료 상태만 보이고, 두 번째 제출 뒤 챕터가 열립니다.\n7. **03 챕터 상세**에서 서로의 이야기와 감상을 읽습니다.\n\n두 사람을 시험하려면 일반 창과 시크릿 창 또는 별도 브라우저 프로필을 사용하세요. 같은 프로필의 탭들은 참여자 쿠키를 공유합니다. 로컬 HTTP에서는 IntelliJ의 **Local** 구성으로 실행합니다.\n\n## 다음 화면을 결정하는 값\n\n| nextAction | 의미 | 화면 동작 |\n| --- | --- | --- |\n| WRITE_STORY | 내 이야기 작성 전 또는 임시저장 중 | 이야기 작성 화면 열기 |\n| WAIT | 나는 완료했고 상대는 작성 중 | 대기 화면 표시 |\n| DO_MISSION | 두 사람 모두 이야기 작성 완료 | 상대 미션 표시 |\n| WAIT_FOR_OPEN | 내 감상을 제출했고 상대는 수행 중 | 내 감상을 보거나 수정하고 대기 |\n| READ | 두 사람 모두 감상을 제출해 챕터 열림 | 이야기와 결과 읽기 |\n\n**현재 구현 범위**는 챕터와 이야기 작성, 미션 감상 제출·수정, 두 사람의 감상 완료 후 자동 공개입니다. 읽음 표시·푸시·이야기 삭제는 후속 구현입니다. 챕터가 열리기 전에는 상대 이야기와 감상 본문을 숨깁니다.\n\n## 저장과 완료의 차이\n\n- 저장은 작성 도중 여러 번 호출할 수 있고 빈 값도 허용합니다.\n- 작성 완료는 제목·내용·미션이 모두 있어야 합니다.\n- 상대 이야기는 챕터가 열릴 때 공개됩니다. 이야기 작성 완료만으로 본문이 공개되지는 않습니다.\n- 응답은 `success / data / error` 형식을 사용합니다. 실패 이유는 `error.code`와 `error.message`에서 확인하세요."
   },
   "paths": {
     "/api/v1/books/{bookId}/chapters": {
@@ -62,16 +62,20 @@
                           "progress": [
                             {
                               "participantId": 1,
-                              "storyCompleted": false
+                              "storyCompleted": false,
+                              "reflectionCompleted": false
                             },
                             {
                               "participantId": 2,
-                              "storyCompleted": false
+                              "storyCompleted": false,
+                              "reflectionCompleted": false
                             }
                           ],
                           "myStory": null,
                           "counterpartStory": null,
-                          "receivedMission": null
+                          "receivedMission": null,
+                          "myReflection": null,
+                          "counterpartReflection": null
                         }
                       ],
                       "error": null
@@ -258,16 +262,20 @@
                         "progress": [
                           {
                             "participantId": 1,
-                            "storyCompleted": false
+                            "storyCompleted": false,
+                            "reflectionCompleted": false
                           },
                           {
                             "participantId": 2,
-                            "storyCompleted": false
+                            "storyCompleted": false,
+                            "reflectionCompleted": false
                           }
                         ],
                         "myStory": null,
                         "counterpartStory": null,
-                        "receivedMission": null
+                        "receivedMission": null,
+                        "myReflection": null,
+                        "counterpartReflection": null
                       },
                       "error": null
                     }
@@ -498,16 +506,20 @@
                         "progress": [
                           {
                             "participantId": 1,
-                            "storyCompleted": false
+                            "storyCompleted": false,
+                            "reflectionCompleted": false
                           },
                           {
                             "participantId": 2,
-                            "storyCompleted": false
+                            "storyCompleted": false,
+                            "reflectionCompleted": false
                           }
                         ],
                         "myStory": null,
                         "counterpartStory": null,
-                        "receivedMission": null
+                        "receivedMission": null,
+                        "myReflection": null,
+                        "counterpartReflection": null
                       },
                       "error": null
                     }
@@ -525,11 +537,13 @@
                         "progress": [
                           {
                             "participantId": 1,
-                            "storyCompleted": true
+                            "storyCompleted": true,
+                            "reflectionCompleted": false
                           },
                           {
                             "participantId": 2,
-                            "storyCompleted": false
+                            "storyCompleted": false,
+                            "reflectionCompleted": false
                           }
                         ],
                         "myStory": {
@@ -542,7 +556,9 @@
                           "updatedAt": "2026-11-21T13:00:00Z"
                         },
                         "counterpartStory": null,
-                        "receivedMission": null
+                        "receivedMission": null,
+                        "myReflection": null,
+                        "counterpartReflection": null
                       },
                       "error": null
                     }
@@ -560,11 +576,13 @@
                         "progress": [
                           {
                             "participantId": 1,
-                            "storyCompleted": true
+                            "storyCompleted": true,
+                            "reflectionCompleted": false
                           },
                           {
                             "participantId": 2,
-                            "storyCompleted": true
+                            "storyCompleted": true,
+                            "reflectionCompleted": false
                           }
                         ],
                         "myStory": {
@@ -577,7 +595,9 @@
                           "updatedAt": "2026-11-21T13:00:00Z"
                         },
                         "counterpartStory": null,
-                        "receivedMission": "학교 주변을 5분만 산책해 봐."
+                        "receivedMission": "학교 주변을 5분만 산책해 봐.",
+                        "myReflection": null,
+                        "counterpartReflection": null
                       },
                       "error": null
                     }
@@ -717,11 +737,11 @@
             }
           }
         },
-        "description": "챕터를 열거나 작성·대기 화면을 새로 조회할 때 호출합니다.\n\n- myStory는 내 이야기이며 저장 전에는 null입니다.\n- progress는 두 사람의 이야기 완료 여부입니다.\n- 두 사람 모두 완료한 경우에만 receivedMission이 표시됩니다.\n- **상대 제목과 본문은 열리기 전 counterpartStory=null로 숨겨집니다.**\n- 받은 미션을 읽는 것만으로 수행 완료가 되지는 않습니다.",
+        "description": "챕터를 열거나 작성·대기 화면을 새로 조회할 때 호출합니다.\n\n- myStory는 내 이야기이며 저장 전에는 null입니다.\n- progress는 두 사람의 이야기 완료 여부입니다.\n- 두 사람 모두 완료한 경우에만 receivedMission이 표시됩니다.\n- **상대 제목과 본문은 열리기 전 counterpartStory=null로 숨겨집니다.**\n- 받은 미션을 읽는 것만으로 수행 완료가 되지는 않습니다.\n\n- 미션 감상 제출 여부는 `progress[].reflectionCompleted`로 확인합니다. 상대 감상 본문은 챕터가 열리기 전까지 null입니다.\n- 감상 두 개가 모이면 `openedAt`이 채워지고 `counterpartStory`, `counterpartReflection`이 표시됩니다.",
         "operationId": "getChapter"
       },
       "delete": {
-        "summary": "06 빈 챕터 삭제하기",
+        "summary": "07 빈 챕터 삭제하기",
         "tags": [
           "챕터 관리"
         ],
@@ -995,11 +1015,13 @@
                         "progress": [
                           {
                             "participantId": 1,
-                            "storyCompleted": false
+                            "storyCompleted": false,
+                            "reflectionCompleted": false
                           },
                           {
                             "participantId": 2,
-                            "storyCompleted": false
+                            "storyCompleted": false,
+                            "reflectionCompleted": false
                           }
                         ],
                         "myStory": {
@@ -1012,7 +1034,9 @@
                           "updatedAt": "2026-11-21T13:00:00Z"
                         },
                         "counterpartStory": null,
-                        "receivedMission": null
+                        "receivedMission": null,
+                        "myReflection": null,
+                        "counterpartReflection": null
                       },
                       "error": null
                     }
@@ -1312,11 +1336,13 @@
                         "progress": [
                           {
                             "participantId": 1,
-                            "storyCompleted": true
+                            "storyCompleted": true,
+                            "reflectionCompleted": false
                           },
                           {
                             "participantId": 2,
-                            "storyCompleted": false
+                            "storyCompleted": false,
+                            "reflectionCompleted": false
                           }
                         ],
                         "myStory": {
@@ -1329,7 +1355,9 @@
                           "updatedAt": "2026-11-21T13:00:00Z"
                         },
                         "counterpartStory": null,
-                        "receivedMission": null
+                        "receivedMission": null,
+                        "myReflection": null,
+                        "counterpartReflection": null
                       },
                       "error": null
                     }
@@ -1347,11 +1375,13 @@
                         "progress": [
                           {
                             "participantId": 1,
-                            "storyCompleted": true
+                            "storyCompleted": true,
+                            "reflectionCompleted": false
                           },
                           {
                             "participantId": 2,
-                            "storyCompleted": true
+                            "storyCompleted": true,
+                            "reflectionCompleted": false
                           }
                         ],
                         "myStory": {
@@ -1364,7 +1394,9 @@
                           "updatedAt": "2026-11-21T13:00:00Z"
                         },
                         "counterpartStory": null,
-                        "receivedMission": "학교 주변을 5분만 산책해 봐."
+                        "receivedMission": "학교 주변을 5분만 산책해 봐.",
+                        "myReflection": null,
+                        "counterpartReflection": null
                       },
                       "error": null
                     }
@@ -1580,8 +1612,403 @@
             }
           }
         },
-        "description": "작성 화면의 완료 버튼에서 호출합니다. 먼저 **04 내 이야기 저장**이 성공해야 합니다. 요청 본문은 없습니다.\n\n- 책에 두 참여자가 연결돼 있어야 합니다.\n- 제목·본문·미션 중 하나라도 비어 있으면 400입니다.\n- 상대가 아직 완료하지 않았다면 nextAction=WAIT입니다.\n- 두 사람 모두 완료했다면 nextAction=DO_MISSION이며 상대 미션을 보여줍니다.\n- 같은 요청을 반복해도 최초 완료 시각을 유지합니다.\n- **이 요청은 이야기 작성 완료입니다. 미션 수행 완료나 챕터 열림은 후속 단계입니다.**",
+        "description": "작성 화면의 완료 버튼에서 호출합니다. 먼저 **04 내 이야기 저장**이 성공해야 합니다. 요청 본문은 없습니다.\n\n- 책에 두 참여자가 연결돼 있어야 합니다.\n- 제목·본문·미션 중 하나라도 비어 있으면 400입니다.\n- 상대가 아직 완료하지 않았다면 nextAction=WAIT입니다.\n- 두 사람 모두 완료했다면 nextAction=DO_MISSION이며 상대 미션을 보여줍니다.\n- 같은 요청을 반복해도 최초 완료 시각을 유지합니다.\n- **이 요청은 이야기 작성 완료입니다.** 미션 수행 후 감상은 **06 미션 감상 제출·수정**에서 보내며, 양쪽 감상이 모이면 챕터가 열립니다.",
         "operationId": "completeMyStory"
+      }
+    },
+    "/api/v1/chapters/{chapterId}/reflection": {
+      "put": {
+        "summary": "06 미션 감상 제출·수정하기",
+        "tags": [
+          "미션 감상"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chapterId",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "챕터 목록·생성 응답에서 받은 id입니다. 이야기의 id와 구분하세요.",
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "내 감상이 저장됩니다. 두 번째 감상이면 챕터가 즉시 열립니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ChapterView"
+                    },
+                    "error": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "examples": {
+                  "first": {
+                    "summary": "첫 사람 제출: 상대에게 완료 여부만 표시",
+                    "value": {
+                      "success": true,
+                      "data": {
+                        "id": 1,
+                        "bookId": 1,
+                        "name": "초등학생 시절",
+                        "nextAction": "WAIT_FOR_OPEN",
+                        "openedAt": null,
+                        "progress": [
+                          {
+                            "participantId": 1,
+                            "storyCompleted": true,
+                            "reflectionCompleted": true
+                          },
+                          {
+                            "participantId": 2,
+                            "storyCompleted": true,
+                            "reflectionCompleted": false
+                          }
+                        ],
+                        "myStory": {
+                          "id": 10,
+                          "authorId": 1,
+                          "title": "첫 월급을 받던 겨울",
+                          "content": "퇴근 버스에서 좋아하는 노래를 들었어요.",
+                          "missionInstruction": "퇴근길에 좋아하는 노래 한 곡을 들어봐.",
+                          "completedAt": "2026-11-21T13:00:00Z",
+                          "updatedAt": "2026-11-21T13:00:00Z"
+                        },
+                        "counterpartStory": null,
+                        "receivedMission": "학교 주변을 5분만 산책해 봐.",
+                        "myReflection": {
+                          "id": 100,
+                          "participantId": 1,
+                          "content": "학교를 걸으니 추억이 났어요.",
+                          "completedAt": "2026-11-21T13:30:00Z",
+                          "updatedAt": "2026-11-21T13:30:00Z"
+                        },
+                        "counterpartReflection": null
+                      },
+                      "error": null
+                    }
+                  },
+                  "second": {
+                    "summary": "두 번째 사람 제출: 본인 시점에서 챕터 자동 공개",
+                    "value": {
+                      "success": true,
+                      "data": {
+                        "id": 1,
+                        "bookId": 1,
+                        "name": "초등학생 시절",
+                        "nextAction": "READ",
+                        "openedAt": "2026-11-21T14:00:00Z",
+                        "progress": [
+                          {
+                            "participantId": 1,
+                            "storyCompleted": true,
+                            "reflectionCompleted": true
+                          },
+                          {
+                            "participantId": 2,
+                            "storyCompleted": true,
+                            "reflectionCompleted": true
+                          }
+                        ],
+                        "myStory": {
+                          "id": 11,
+                          "authorId": 2,
+                          "title": "학교 앞 골목",
+                          "content": "친구와 걷던 골목이 기억나요.",
+                          "missionInstruction": "학교 주변을 5분만 산책해 봐.",
+                          "completedAt": "2026-11-21T13:10:00Z",
+                          "updatedAt": "2026-11-21T13:10:00Z"
+                        },
+                        "counterpartStory": {
+                          "id": 10,
+                          "authorId": 1,
+                          "title": "첫 월급을 받던 겨울",
+                          "content": "퇴근 버스에서 좋아하는 노래를 들었어요.",
+                          "missionInstruction": "퇴근길에 좋아하는 노래 한 곡을 들어봐.",
+                          "completedAt": "2026-11-21T13:00:00Z",
+                          "updatedAt": "2026-11-21T13:00:00Z"
+                        },
+                        "receivedMission": "퇴근길에 좋아하는 노래 한 곡을 들어봐.",
+                        "myReflection": {
+                          "id": 101,
+                          "participantId": 2,
+                          "content": "퇴근길에 노래를 들으니 엄마가 생각났어요.",
+                          "completedAt": "2026-11-21T14:00:00Z",
+                          "updatedAt": "2026-11-21T14:00:00Z"
+                        },
+                        "counterpartReflection": {
+                          "id": 100,
+                          "participantId": 1,
+                          "content": "학교를 걸으니 추억이 났어요.",
+                          "completedAt": "2026-11-21T13:30:00Z",
+                          "updatedAt": "2026-11-21T13:30:00Z"
+                        }
+                      },
+                      "error": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "감상이 비어 있거나 길이 제한을 넘었습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVALID_REQUEST",
+                    "message": "입력값을 확인해 주세요."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "참여자 시작이 필요합니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "SESSION_REQUIRED",
+                    "message": "먼저 닉네임을 입력해 주세요."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "없는 챕터이거나 해당 책의 참여자가 아닙니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "chapterMissing": {
+                    "summary": "챕터 없음",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "CHAPTER_NOT_FOUND",
+                        "message": "챕터를 찾을 수 없어요."
+                      }
+                    }
+                  },
+                  "bookAccess": {
+                    "summary": "책 참여자 아님",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "BOOK_NOT_FOUND",
+                        "message": "책을 찾을 수 없어요."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "이야기 작성이 끝나지 않았거나 이미 열린 챕터입니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "CHAPTER_OPENED",
+                    "message": "열린 챕터는 수정하거나 삭제할 수 없어요."
+                  }
+                },
+                "examples": {
+                  "notReady": {
+                    "summary": "미션이 아직 준비되지 않음",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "MISSION_NOT_READY",
+                        "message": "두 사람의 이야기 작성이 끝난 뒤 감상을 제출해 주세요."
+                      }
+                    }
+                  },
+                  "opened": {
+                    "summary": "이미 열린 챕터",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "CHAPTER_OPENED",
+                        "message": "열린 챕터는 수정하거나 삭제할 수 없어요."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "예상하지 못한 서버 오류입니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "요청을 처리하지 못했어요."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteReflection"
+              },
+              "example": {
+                "content": "학교 주변을 걸으니 엄마가 말한 풍경이 조금 이해됐어요."
+              }
+            }
+          }
+        },
+        "description": "상대의 미션을 수행한 사람이 **자기 감상**을 제출합니다. 첫 요청이 수행 완료로 기록됩니다. 챕터가 열리기 전에는 같은 경로로 내 감상을 수정할 수 있습니다.\n\n- 두 사람 모두 이야기를 작성 완료한 후에만 제출할 수 있습니다. 그전에는 `409 MISSION_NOT_READY`입니다.\n- 감상은 공백이 아니어야 하며 최대 10,000자입니다.\n- 첫 사람 제출 뒤 `nextAction=WAIT_FOR_OPEN`; 미션을 준 사람은 `progress[].reflectionCompleted=true`만 확인하고 본문은 보지 못합니다.\n- 두 번째 사람 제출과 같은 트랜잭션에서 챕터가 열립니다. 이후 `nextAction=READ`이며 양쪽 이야기·감상이 공개되고 수정은 `409 CHAPTER_OPENED`입니다.",
+        "operationId": "submitOrUpdateMissionReflection"
       }
     }
   },
@@ -1700,13 +2127,19 @@
           },
           "storyCompleted": {
             "type": "boolean",
-            "description": "그 사람이 이야기 작성 완료를 눌렀는지 나타냅니다. 미션 후기 완료 여부와 다릅니다.",
+            "description": "그 사람이 이야기 작성을 완료했는지 나타냅니다.",
             "example": true
+          },
+          "reflectionCompleted": {
+            "type": "boolean",
+            "description": "해당 참여자가 상대의 미션을 수행하고 감상을 제출했는지 나타냅니다. 미션을 준 사람은 이 값으로 완료 여부를 확인합니다. 감상 본문은 챕터가 열리기 전까지 볼 수 없습니다.",
+            "example": false
           }
         },
         "required": [
           "participantId",
-          "storyCompleted"
+          "storyCompleted",
+          "reflectionCompleted"
         ]
       },
       "ChapterView": {
@@ -1735,6 +2168,7 @@
               "WRITE_STORY",
               "WAIT",
               "DO_MISSION",
+              "WAIT_FOR_OPEN",
               "READ"
             ],
             "description": "현재 참여자를 기준으로 다음에 할 행동. 위 상태표를 참고하세요.",
@@ -1744,14 +2178,14 @@
             "type": "string",
             "format": "date-time",
             "nullable": true,
-            "description": "챕터가 열린 시각. 열리기 전에는 null이며 현재 구현에서는 항상 null입니다."
+            "description": "두 참여자의 감상이 모두 제출되어 챕터가 열린 시각. 열리기 전에는 null입니다."
           },
           "progress": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Progress"
             },
-            "description": "책 참여자별 이야기 완료 상태. 상대의 제목·본문은 포함하지 않습니다."
+            "description": "책 참여자별 이야기와 미션 수행 완료 여부. 상대의 본문은 포함하지 않습니다."
           },
           "myStory": {
             "allOf": [
@@ -1776,6 +2210,24 @@
             "nullable": true,
             "description": "두 사람이 모두 이야기를 완료하면 표시하는 상대 미션 문구. 그전에는 null입니다.",
             "example": "학교 주변을 5분만 산책해 봐."
+          },
+          "myReflection": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Reflection"
+              }
+            ],
+            "nullable": true,
+            "description": "내가 상대 미션을 수행한 뒤 제출한 감상. 아직 제출하지 않았으면 null입니다."
+          },
+          "counterpartReflection": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Reflection"
+              }
+            ],
+            "nullable": true,
+            "description": "상대가 내 미션을 수행한 뒤 쓴 감상. 챕터가 열리기 전에는 null입니다."
           }
         },
         "required": [
@@ -1787,8 +2239,66 @@
           "progress",
           "myStory",
           "counterpartStory",
-          "receivedMission"
+          "receivedMission",
+          "myReflection",
+          "counterpartReflection"
         ]
+      },
+      "WriteReflection": {
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10000,
+            "description": "상대가 보낸 미션을 수행한 뒤 내가 느낀 점. 공백만 입력할 수 없습니다.",
+            "example": "학교 주변을 걸으니 엄마가 말한 풍경이 조금 이해됐어요."
+          }
+        }
+      },
+      "Reflection": {
+        "type": "object",
+        "required": [
+          "id",
+          "participantId",
+          "content",
+          "completedAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "감상 ID.",
+            "example": 100
+          },
+          "participantId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "미션을 수행하고 감상을 쓴 참여자 ID.",
+            "example": 1
+          },
+          "content": {
+            "type": "string",
+            "description": "미션 수행 후 느낀 점.",
+            "example": "학교를 걸으니 추억이 났어요."
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "첫 제출 시각. 수정해도 유지됩니다.",
+            "example": "2026-11-21T13:30:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "마지막 수정 시각.",
+            "example": "2026-11-21T13:30:00Z"
+          }
+        }
       }
     }
   },
@@ -1811,6 +2321,10 @@
     {
       "name": "내 이야기",
       "description": "현재 참여자 본인의 추억과 상대에게 보낼 미션을 저장·완료합니다."
+    },
+    {
+      "name": "미션 감상",
+      "description": "상대 미션을 수행한 감상을 제출하고, 양쪽 완료 후 열린 챕터를 읽습니다."
     }
   ]
 }

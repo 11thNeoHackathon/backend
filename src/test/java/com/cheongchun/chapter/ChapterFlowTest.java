@@ -64,6 +64,8 @@ class ChapterFlowTest {
         assertThat(call("DELETE", chapter, child, null).statusCode()).isEqualTo(409);
         assertThat(call("POST", chapter + "/story/complete", parent, null).body()).contains("WAIT");
         assertThat(call("POST", chapter + "/story/complete", parent, null).statusCode()).isEqualTo(200);
+        assertThat(call("PUT", chapter + "/reflection", parent, "{\"content\":\"아직 안 됨\"}")
+                .statusCode()).isEqualTo(409);
 
         String childStory = "{\"title\":\"대학 첫날\",\"content\":\"자녀의 비밀 추억\","
                 + "\"missionInstruction\":\"학교 산책하기\"}";
@@ -78,6 +80,34 @@ class ChapterFlowTest {
                 .contains("학교 산책하기").doesNotContain("자녀의 비밀 추억");
         assertThat(call("PUT", chapter + "/story", child, "{}").statusCode()).isEqualTo(400);
         assertThat(call("PUT", chapter + "/story", parent, parentStory).statusCode()).isEqualTo(200);
+        assertThat(call("PUT", chapter + "/reflection", outsider, "{\"content\":\"접근 불가\"}")
+                .statusCode()).isEqualTo(404);
+        assertThat(call("PUT", chapter + "/reflection", parent, "{\"content\":\" \"}")
+                .statusCode()).isEqualTo(400);
+
+        var parentReflected = call("PUT", chapter + "/reflection", parent,
+                "{\"content\":\"학교를 걸으니 추억이 났다\"}");
+        assertThat(parentReflected.statusCode()).isEqualTo(200);
+        assertThat(parentReflected.body()).contains("WAIT_FOR_OPEN", "학교를 걸으니 추억이 났다");
+        var childWhileClosed = call("GET", chapter, child, null);
+        assertThat(childWhileClosed.body()).doesNotContain("학교를 걸으니 추억이 났다", "엄마의 비밀 추억");
+        assertThat((Object) JsonPath.read(childWhileClosed.body(), "$.data.counterpartReflection")).isNull();
+        assertThat((Boolean) JsonPath.read(childWhileClosed.body(), "$.data.progress[0].reflectionCompleted"))
+                .isTrue();
+        assertThat(call("PUT", chapter + "/reflection", parent,
+                "{\"content\":\"학교 산책을 다시 해 봤다\"}").statusCode()).isEqualTo(200);
+
+        var opened = call("PUT", chapter + "/reflection", child,
+                "{\"content\":\"노래를 들으며 엄마를 떠올렸다\"}");
+        assertThat(opened.statusCode()).isEqualTo(200);
+        assertThat(opened.body()).contains("READ", "엄마의 비밀 추억", "학교 산책을 다시 해 봤다");
+        assertThat((Object) JsonPath.read(opened.body(), "$.data.openedAt")).isNotNull();
+        assertThat(call("GET", chapter, parent, null).body())
+                .contains("자녀의 비밀 추억", "노래를 들으며 엄마를 떠올렸다");
+        assertThat(call("PUT", chapter + "/reflection", parent,
+                "{\"content\":\"뒤늦은 수정\"}").statusCode()).isEqualTo(409);
+        assertThat(call("PUT", chapter + "/story", child, childStory).statusCode()).isEqualTo(409);
+        assertThat(call("DELETE", chapter, child, null).statusCode()).isEqualTo(409);
 
         var empty = call("POST", "/books/" + bookId + "/chapters", child, "{\"name\":\"빈 챕터\"}");
         assertThat(empty.statusCode()).isEqualTo(201);

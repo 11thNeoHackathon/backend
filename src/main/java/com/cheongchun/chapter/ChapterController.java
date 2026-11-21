@@ -43,6 +43,12 @@ class ChapterController {
         return ok(chapters.complete(chapterId));
     }
 
+    @PutMapping("/chapters/{chapterId}/reflection")
+    ResponseEntity<ApiResponse<ChapterView>> reflect(@PathVariable long chapterId,
+                                                      @RequestBody WriteReflection input) {
+        return ok(chapters.reflect(chapterId, input));
+    }
+
     @DeleteMapping("/chapters/{chapterId}")
     ResponseEntity<ApiResponse<Void>> delete(@PathVariable long chapterId) {
         chapters.delete(chapterId);
