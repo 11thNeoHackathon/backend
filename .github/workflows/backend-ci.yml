@@ -76,9 +76,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: production
-    permissions:
-      contents: read
-      id-token: write
     concurrency:
       group: hackathon-backend-production
       cancel-in-progress: false
@@ -88,19 +85,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EC2_AWS_REGION: ${{ vars.EC2_AWS_REGION }}
-          EC2_AWS_ROLE_ARN: ${{ vars.EC2_AWS_ROLE_ARN }}
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          AWS_ACCESS_KEY_ID_PRESENT: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+          AWS_SECRET_ACCESS_KEY_PRESENT: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' }}
         shell: bash
         run: |
           set -euo pipefail
           missing=()
-          for variable in EC2_AWS_REGION EC2_AWS_ROLE_ARN EC2_INSTANCE_ID; do
+          for variable in EC2_AWS_REGION EC2_INSTANCE_ID; do
             if [[ -z ${!variable} ]]; then
               missing+=("$variable")
             fi
           done
+          if [[ $AWS_ACCESS_KEY_ID_PRESENT != true ]]; then
+            missing+=(AWS_ACCESS_KEY_ID)
+          fi
+          if [[ $AWS_SECRET_ACCESS_KEY_PRESENT != true ]]; then
+            missing+=(AWS_SECRET_ACCESS_KEY)
+          fi
           if (( ${#missing[@]} > 0 )); then
-            message="Deployment skipped. Missing production variables: ${missing[*]}."
+            message="Deployment skipped. Missing production settings: ${missing[*]}."
             printf '%s\n' "$message" >> "$GITHUB_STEP_SUMMARY"
             if [[ $GITHUB_EVENT_NAME == workflow_dispatch ]]; then
               printf '::error::%s\n' "$message"
@@ -130,14 +134,13 @@ jobs:
         with:
           name: hackathon-backend
           path: ${{ runner.temp }}/hackathon-release
-      - name: Assume the deployment role using OIDC
+      - name: Configure the deployment IAM user credentials
         if: steps.preflight.outputs.ready == 'true'
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: ${{ vars.EC2_AWS_REGION }}
-          role-to-assume: ${{ vars.EC2_AWS_ROLE_ARN }}
-          role-session-name: hackathon-${{ github.run_id }}-${{ github.run_attempt }}
-          role-duration-seconds: 900
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - name: Deploy the tested main revision
         if: steps.preflight.outputs.ready == 'true'
         env:

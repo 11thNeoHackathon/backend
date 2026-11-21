@@ -42,20 +42,21 @@ RDS에서 `VERIFY_IDENTITY`를 사용할 때는 [RDS 루트 CA](https://docs.aws
 
 ## EC2 자동 배포
 
-PR에서는 테스트용 MySQL 8과 Java 21로 테스트·빌드를 실행합니다. `main`에 푸시하거나 PR을 병합하면 검증한 JAR를 AWS Systems Manager Session Manager의 SSH 터널로 EC2에 전송합니다. EC2의 보안 그룹에 GitHub 러너용 SSH 인바운드 규칙을 추가할 필요가 없습니다. GitHub는 OIDC에서 발급받은 임시 AWS 자격 증명을 사용합니다.
+PR에서는 테스트용 MySQL 8과 Java 21로 테스트·빌드를 실행합니다. `main`에 푸시하거나 PR을 병합하면 검증한 JAR를 AWS Systems Manager Session Manager의 SSH 터널로 EC2에 전송합니다. GitHub Actions는 배포 전용 IAM 사용자의 액세스 키로 AWS에 인증합니다. EC2의 보안 그룹에 GitHub 러너용 SSH 인바운드 규칙을 추가할 필요가 없습니다.
 
 1. AWS에서 배포 대상 EC2가 Systems Manager 관리형 노드에서 `Online`인지 확인합니다. EC2용 인스턴스 역할에 `AmazonSSMManagedInstanceCore`를 추가하고, SSM Agent가 AWS 엔드포인트로 HTTPS 통신할 수 있어야 합니다. Session Manager 터널에서 EC2의 `sshd`가 22번 포트로 요청을 받아야 합니다. [EC2 권한 설정](https://docs.aws.amazon.com/systems-manager/latest/userguide/setup-instance-permissions.html)
-2. GitHub Actions용 AWS IAM 역할을 준비합니다. OIDC 제공자는 `token.actions.githubusercontent.com`, 신뢰 조건 `aud`는 `sts.amazonaws.com`, `sub`는 `repo:11thNeoHackathon/backend:environment:production`으로 설정합니다. 이 역할에 대상 EC2 인스턴스 ARN과 `arn:aws:ssm:<리전>::document/AWS-StartSSHSession`을 대상으로 한 `ssm:StartSession`만 허용합니다. `ssm:TerminateSession` 및 `ssmmessages:OpenDataChannel`이 필요한 경우 AWS 예제의 세션 소유자 조건을 적용합니다. [OIDC 신뢰 조건](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-idp_oidc.html) · [SSH 세션 IAM 정책](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-getting-started-enable-ssh-connections.html)
+2. **AWS IAM → Users → Create user**에서 콘솔 로그인 권한 없이 배포 전용 사용자를 만듭니다. 사용자 화면의 **Permissions → Add permissions → Create inline policy → JSON**에 [배포 사용자 정책](deploy/ec2/iam-user-policy.json)을 붙여 넣습니다. `111122223333`을 실제 AWS 계정 ID로 모두 바꾸고 `i-0123456789abcdef0`을 대상 EC2 인스턴스 ID로 바꿉니다. 대상이 다른 리전에 있다면 ARN의 리전도 바꿉니다. 이 정책은 대상 EC2의 `AWS-StartSSHSession`과 사용자가 시작한 세션의 데이터 채널·종료에 필요한 권한을 부여합니다. 정책을 저장한 뒤 **Security credentials → Create access key**에서 배포 사용자 키를 발급합니다. [SSH 세션 IAM 정책](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-getting-started-enable-ssh-connections.html) · [AWS 액세스 키 발급](https://docs.aws.amazon.com/IAM/latest/UserGuide/access-keys-admin-managed.html)
 3. 저장소의 **Settings → Environments → production**에서 배포 브랜치를 `main`으로 제한합니다. 아래 값을 **Environment secrets**와 **Environment variables**에 등록합니다.
 
    | 종류 | 이름 | 등록할 값 |
    | --- | --- | --- |
+   | 시크릿 | `AWS_ACCESS_KEY_ID` | 배포 전용 IAM 사용자의 액세스 키 ID. |
+   | 시크릿 | `AWS_SECRET_ACCESS_KEY` | 같은 키의 비밀 액세스 키. GitHub 입력창에 직접 등록합니다. |
    | 시크릿 | `EC2_HOST` | 기존 `known_hosts`에서 조회할 때 사용한 서버 주소. SSH 호스트 키 별칭으로 사용합니다. |
    | 시크릿 | `EC2_USER` | EC2의 SSH 사용자 이름. |
    | 시크릿 | `EC2_SSH_PRIVATE_KEY` | EC2 접속용 `.pem` 개인키 전체. GitHub 입력창에 직접 등록합니다. |
    | 시크릿 | `EC2_KNOWN_HOSTS` | 검증된 EC2 SSH 호스트 공개키의 `known_hosts` 줄. |
-   | 변수 | `EC2_AWS_REGION` | 배포 대상 EC2 리전 코드. |
-   | 변수 | `EC2_AWS_ROLE_ARN` | GitHub Actions용 OIDC 역할의 ARN. |
+   | 변수 | `EC2_AWS_REGION` | 배포 대상 EC2 리전 코드. 현재 리전은 `ap-southeast-2`입니다. |
    | 변수 | `EC2_INSTANCE_ID` | 배포 대상 EC2의 `i-` 인스턴스 ID. |
    | 변수 | `EC2_HEALTH_BASE_URL` | 선택 항목. 기본값은 `http://127.0.0.1`입니다. HTTPS에서는 Nginx 인증서의 실제 도메인을 포함한 `https://api.example.com` 형태를 사용합니다. |
 
@@ -63,7 +64,7 @@ PR에서는 테스트용 MySQL 8과 Java 21로 테스트·빌드를 실행합니
    ssh-keygen -F '<서버 주소>' -f "$env:USERPROFILE\.ssh\known_hosts" | Where-Object { $_ -notmatch '^#' }
    ```
 
-4. 구성이 끝나면 **Settings → Secrets and variables → Actions → Variables**에서 저장소 변수 `EC2_DEPLOY_ENABLED=true`로 배포를 활성화합니다. 배포가 활성화돼 있어도 필수 SSM 변수가 비어 있으면 `main` 푸시에서 경고를 남기고 배포를 건너뜁니다. 구성을 마친 뒤 **Actions → Backend CI/CD → Run workflow**에서 `main`을 선택하여 첫 자동 배포를 검증합니다. 수동 실행에서 필수 값이 비어 있으면 누락된 이름을 표시하고 실패합니다. `TargetNotConnected`가 발생하면 EC2의 SSM 등록 상태와 인스턴스 역할을 확인합니다.
+4. 구성이 끝나면 **Settings → Secrets and variables → Actions → Variables**에서 저장소 변수 `EC2_DEPLOY_ENABLED=true`로 배포를 활성화합니다. AWS 키 시크릿이나 SSM 변수가 비어 있으면 `main` 푸시에서 경고를 남기고 배포를 건너뜁니다. **Actions → Backend CI/CD → Run workflow**에서 `main`을 선택하여 첫 자동 배포를 검증합니다. 수동 실행에서 사전 점검에 필요한 항목이 비어 있으면 누락된 이름을 표시하고 실패합니다. `TargetNotConnected`가 발생하면 EC2의 SSM 등록 상태와 인스턴스 역할을 확인합니다.
 
 배포 계정은 `/home/ubuntu`에 쓰기 권한과 `sudo -n /usr/bin/systemctl restart hackathon.service` 실행 권한이 필요합니다. `app.jar` 소유자가 배포 계정과 다르면 `sudo -n /usr/bin/chown --reference=...`으로 소유권과 그룹을 유지할 수 있어야 합니다.
 
