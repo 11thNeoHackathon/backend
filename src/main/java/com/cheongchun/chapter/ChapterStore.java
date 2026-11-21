@@ -5,10 +5,13 @@ import static com.cheongchun.chapter.ChapterModels.*;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -31,11 +34,12 @@ class ChapterStore {
     }
 
     long create(long bookId, long creatorId, String name) {
-        return jdbc.sql("""
+        var key = new GeneratedKeyHolder();
+        jdbc.sql("""
                 INSERT INTO chapter(book_id, created_by, name) VALUES (:bookId, :creatorId, :name)
-                RETURNING id
                 """).param("bookId", bookId).param("creatorId", creatorId).param("name", name)
-                .query(Long.class).single();
+                .update(key, "id");
+        return Objects.requireNonNull(key.getKey(), "Chapter ID was not generated").longValue();
     }
 
     List<Long> members(long bookId) {
@@ -57,9 +61,9 @@ class ChapterStore {
         jdbc.sql("""
                 INSERT INTO story(chapter_id, author_id, title, content, mission_instruction)
                 VALUES (:chapterId, :authorId, :title, :content, :mission)
-                ON CONFLICT(chapter_id, author_id) DO UPDATE
-                SET title = EXCLUDED.title, content = EXCLUDED.content,
-                    mission_instruction = EXCLUDED.mission_instruction, updated_at = CURRENT_TIMESTAMP
+                ON DUPLICATE KEY UPDATE
+                    title = :title, content = :content,
+                    mission_instruction = :mission, updated_at = CURRENT_TIMESTAMP(6)
                 """).param("chapterId", chapterId).param("authorId", authorId)
                 .param("title", input.title()).param("content", input.content())
                 .param("mission", input.missionInstruction()).update();
@@ -67,8 +71,8 @@ class ChapterStore {
 
     void complete(long chapterId, long authorId) {
         jdbc.sql("""
-                UPDATE story SET completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP),
-                                 updated_at = CURRENT_TIMESTAMP
+                UPDATE story SET completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP(6)),
+                                 updated_at = CURRENT_TIMESTAMP(6)
                 WHERE chapter_id = :chapterId AND author_id = :authorId
                 """).param("chapterId", chapterId).param("authorId", authorId).update();
     }
@@ -86,14 +90,14 @@ class ChapterStore {
         jdbc.sql("""
                 INSERT INTO reflection(chapter_id, participant_id, content)
                 VALUES (:chapterId, :participantId, :content)
-                ON CONFLICT(chapter_id, participant_id) DO UPDATE
-                SET content = EXCLUDED.content, updated_at = CURRENT_TIMESTAMP
+                ON DUPLICATE KEY UPDATE
+                    content = :content, updated_at = CURRENT_TIMESTAMP(6)
                 """).param("chapterId", chapterId).param("participantId", participantId)
                 .param("content", content).update();
     }
 
     void open(long chapterId) {
-        jdbc.sql("UPDATE chapter SET opened_at = CURRENT_TIMESTAMP WHERE id = :id AND opened_at IS NULL")
+        jdbc.sql("UPDATE chapter SET opened_at = CURRENT_TIMESTAMP(6) WHERE id = :id AND opened_at IS NULL")
                 .param("id", chapterId).update();
     }
 
@@ -107,7 +111,7 @@ class ChapterStore {
     }
 
     private static Instant instant(ResultSet row, String column) throws SQLException {
-        OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
-        return value == null ? null : value.toInstant();
+        LocalDateTime value = row.getObject(column, LocalDateTime.class);
+        return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
 }

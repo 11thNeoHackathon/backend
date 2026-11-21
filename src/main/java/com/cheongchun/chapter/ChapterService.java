@@ -7,6 +7,7 @@ import com.cheongchun.common.auth.BookAccessService;
 import com.cheongchun.common.auth.ParticipantContext;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -43,7 +44,7 @@ class ChapterService {
         return view(authorized(chapterId, me, false), me);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ChapterView write(long chapterId, WriteStory input) {
         long me = participants.currentParticipantId();
         Chapter chapter = authorized(chapterId, me, true);
@@ -56,12 +57,17 @@ class ChapterService {
             text(clean.title(), 200, true, "이야기 제목");
             text(clean.content(), 20000, true, "이야기");
             text(clean.missionInstruction(), 2000, true, "미션");
+            boolean missionVisible = store.stories(chapterId).stream()
+                    .anyMatch(story -> story.authorId() != me && story.completedAt() != null);
+            if (missionVisible && !clean.missionInstruction().equals(current.missionInstruction())) {
+                throw ApiException.conflict("MISSION_LOCKED", "상대에게 공개된 미션은 수정할 수 없어요.");
+            }
         }
         store.write(chapterId, me, clean);
         return view(chapter, me);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ChapterView complete(long chapterId) {
         long me = participants.currentParticipantId();
         Chapter chapter = authorized(chapterId, me, true);
@@ -80,7 +86,7 @@ class ChapterService {
         return view(chapter, me);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ChapterView reflect(long chapterId, WriteReflection input) {
         long me = participants.currentParticipantId();
         Chapter chapter = authorized(chapterId, me, true);
@@ -98,7 +104,7 @@ class ChapterService {
         return view(chapter, me);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void delete(long chapterId) {
         long me = participants.currentParticipantId();
         Chapter chapter = authorized(chapterId, me, true);

@@ -2,9 +2,11 @@ spring:
   application:
     name: youth-exchange
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/youth_exchange}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:}
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      connection-init-sql: "SET time_zone = '+00:00'"
   flyway:
     enabled: true
   mvc:

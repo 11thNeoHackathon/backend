@@ -1,7 +1,8 @@
 package com.cheongchun.common.auth;
 
 import com.cheongchun.common.api.ApiException;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
@@ -20,7 +21,7 @@ public class BookAccessService {
                 """).param("bookId", bookId).param("participantId", participantId)
                 .query((row, index) -> new BookParticipant(row.getLong("id"), row.getLong("book_id"),
                         row.getLong("participant_id"), row.getInt("slot_no"), row.getString("counterpart_label"),
-                        row.getObject("joined_at", OffsetDateTime.class).toInstant()))
+                        row.getObject("joined_at", LocalDateTime.class).toInstant(ZoneOffset.UTC)))
                 .optional().orElseThrow(BookAccessService::bookNotFound);
     }
 

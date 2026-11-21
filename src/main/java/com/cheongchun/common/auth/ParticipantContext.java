@@ -8,6 +8,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -51,7 +52,7 @@ public class ParticipantContext {
                 SELECT p.id, p.display_name, p.birth_year
                 FROM participant_session s JOIN participant p ON p.id = s.participant_id
                 WHERE s.token_hash = :tokenHash AND s.revoked_at IS NULL AND s.expires_at > :now
-                """).param("tokenHash", hash(cookie.getValue())).param("now", clock.instant().atOffset(ZoneOffset.UTC))
+                """).param("tokenHash", hash(cookie.getValue())).param("now", LocalDateTime.now(clock.withZone(ZoneOffset.UTC)))
                 .query((row, index) -> new ParticipantIdentity(row.getLong("id"), row.getString("display_name"),
                         row.getObject("birth_year", Integer.class))).optional();
     }
@@ -64,7 +65,7 @@ public class ParticipantContext {
                 INSERT INTO participant_session (participant_id, token_hash, expires_at)
                 VALUES (:participantId, :tokenHash, :expiresAt)
                 """).param("participantId", participantId).param("tokenHash", hash(token))
-                .param("expiresAt", clock.instant().plus(SESSION_LIFETIME).atOffset(ZoneOffset.UTC)).update();
+                .param("expiresAt", LocalDateTime.ofInstant(clock.instant().plus(SESSION_LIFETIME), ZoneOffset.UTC)).update();
         return token;
     }
 
