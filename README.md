@@ -40,6 +40,26 @@ RDS에서 `VERIFY_IDENTITY`를 사용할 때는 [RDS 루트 CA](https://docs.aws
 
 같은 MySQL 데이터베이스에 V1 가족 연결, V2 공유 챕터·이야기, V3 미션 감상 마이그레이션이 순서대로 적용됩니다. Swagger UI에서 `가족 연결`과 `챕터와 이야기` 문서를 선택할 수 있습니다. 서버 2의 요청 순서와 공개 규칙은 [서버 2 구현](docs/서버2%20구현.md)을 참고하세요. 두 사람의 동시 감상 제출과 공개된 미션 문구 변경도 통합 테스트에서 확인합니다.
 
+## EC2 자동 배포
+
+PR에서는 테스트용 MySQL 8과 Java 21로 테스트·빌드를 실행합니다. `main`에 푸시하거나 PR을 병합하면 같은 검증을 거친 JAR를 EC2의 `/home/ubuntu/app.jar`에 배포합니다. `hackathon.service`를 재시작한 뒤 Spring Boot와 Nginx 양쪽에서 `/openapi/server1.yaml`을 확인합니다. 확인에 실패하면 이전 JAR를 복원합니다. 운영 RDS 연결은 서비스가 사용하는 기존 `/etc/hackathon.env`에서 읽습니다. Flyway가 실행한 DB 마이그레이션은 JAR 복원 시 되돌리지 않으므로 배포할 마이그레이션은 직전 애플리케이션과 호환되게 작성합니다.
+
+1. 저장소의 **Settings → Environments**에서 `production` 환경을 만들고, 배포 브랜치를 `main`으로 제한합니다. 해당 환경의 **Environment secrets**에 아래 네 항목을 등록합니다.
+
+   | 시크릿 | 등록할 값 |
+   | --- | --- |
+   | `EC2_HOST` | `3.104.111.132` |
+   | `EC2_USER` | `ubuntu` |
+   | `EC2_SSH_PRIVATE_KEY` | EC2에 접속하는 `.pem` 개인키 전체를 GitHub Secrets 입력창에 직접 등록합니다. |
+   | `EC2_KNOWN_HOSTS` | 검증된 SSH 호스트 공개키의 `known_hosts` 줄을 등록합니다. 아래 명령은 Windows에 이미 저장해 둔 해당 호스트의 항목을 조회합니다. |
+
+   ```powershell
+   ssh-keygen -F 3.104.111.132 -f "$env:USERPROFILE\.ssh\known_hosts" | Where-Object { $_ -notmatch '^#' }
+   ```
+
+2. **Settings → Secrets and variables → Actions → Variables**에서 저장소 변수 `EC2_DEPLOY_ENABLED`를 만들고 `true`로 설정합니다. 변수가 생기기 전에는 빌드·테스트만 실행됩니다.
+3. 병합 뒤에는 다음 `main` 푸시를 기다리거나 **Actions → Backend CI/CD → Run workflow**에서 `main`을 선택합니다. `deploy-ec2` 작업 성공과 배포 주소의 `/openapi/server1.yaml` 응답을 확인합니다. SSH가 시간 초과되면 EC2 보안 그룹에서 Actions 러너가 22번 포트에 접근 가능한지 확인합니다.
+
 ## 배포 프론트 연동 확인
 
 - 프론트와 API가 다른 오리진이면 `FRONTEND_ORIGIN`에 경로 없이 프론트의 정확한 오리진을 설정합니다. 예를 들어 `https://app.example.com`입니다. 프론트 요청은 `credentials: 'include'`를 사용하고, API는 설정한 오리진의 `GET`, `POST`, `PUT`, `DELETE`를 허용합니다.
