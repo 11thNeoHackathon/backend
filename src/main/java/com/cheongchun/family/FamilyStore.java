@@ -2,6 +2,7 @@ package com.cheongchun.family;
 
 import static com.cheongchun.family.FamilyModels.*;
 
+import com.cheongchun.common.auth.ParticipantContext.ParticipantIdentity;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -30,30 +31,12 @@ class FamilyStore {
         this.jdbc = jdbc;
     }
 
-    Optional<Participant> participantBySession(String tokenHash, Instant now) {
-        return jdbc.sql("""
-                SELECT p.id, p.display_name, p.birth_year
-                FROM participant_session s JOIN participant p ON p.id = s.participant_id
-                WHERE s.token_hash = :tokenHash AND s.revoked_at IS NULL AND s.expires_at > :now
-                """).param("tokenHash", tokenHash).param("now", utc(now))
-                .query((row, index) -> new Participant(row.getLong("id"), row.getString("display_name"),
-                        row.getObject("birth_year", Integer.class))).optional();
-    }
-
-    Participant createParticipant(String displayName, Integer birthYear) {
+    ParticipantIdentity createParticipant(String displayName, Integer birthYear) {
         long id = jdbc.sql("""
                 INSERT INTO participant (display_name, birth_year) VALUES (:displayName, :birthYear) RETURNING id
                 """).param("displayName", displayName).param("birthYear", birthYear)
                 .query(Long.class).single();
-        return new Participant(id, displayName, birthYear);
-    }
-
-    void createSession(long participantId, String tokenHash, Instant expiresAt) {
-        jdbc.sql("""
-                INSERT INTO participant_session (participant_id, token_hash, expires_at)
-                VALUES (:participantId, :tokenHash, :expiresAt)
-                """).param("participantId", participantId).param("tokenHash", tokenHash)
-                .param("expiresAt", utc(expiresAt)).update();
+        return new ParticipantIdentity(id, displayName, birthYear);
     }
 
     long createBook(long creator, String title) {

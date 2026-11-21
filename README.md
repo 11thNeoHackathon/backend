@@ -34,4 +34,15 @@ macOS/Linux는 `COOKIE_SECURE=false ./gradlew bootRun`을 사용합니다. 시�
 
 초대 링크 유효 기간은 24시간, 기기 쿠키 유효 기간은 30일입니다. 초대 링크의 UI는 프론트에서 처리하며, API에서 받은 코드로 미리보기와 수락 요청을 보냅니다. 프론트를 별도 오리진에 올릴 때도 같은 사이트의 HTTPS 배치를 권장합니다. 쿠키를 삭제하거나 쿠키가 만료된 기기의 기존 책을 복구하는 기능은 제공하지 않습니다.
 
-`./gradlew test` 또는 `.\gradlew.bat test`는 임베디드 PostgreSQL에서 공통 시나리오 1과 1-1을 확인합니다. 테스트용 DB는 별도로 설치할 필요가 없습니다.
+`./gradlew test` 또는 `.\gradlew.bat test`는 임베디드 PostgreSQL에서 공통 시나리오 1, 1-1, 5-1을 확인합니다. 테스트용 DB는 별도로 설치할 필요가 없습니다.
+
+## 다른 API에서 공통 컴포넌트 사용
+
+`com.cheongchun.common.auth`의 `ParticipantContext`와 `BookAccessService`를 생성자로 주입하고, 요청 안에서 아래 순서로 호출합니다. 쿠키가 없거나 만료·폐기됐으면 `401`, 책이 없거나 참여하지 않은 책이면 같은 `404`를 반환합니다. 요청 본문의 ID 대신 여기서 얻은 `participantId`로 작성자나 감상 제출자를 확인합니다.
+
+```java
+long participantId = participantContext.currentParticipantId();
+BookParticipant membership = bookAccessService.requireParticipant(bookId, participantId);
+```
+
+이후 작성자·미션 수행자 등 기능별 권한이 부족하면 `ApiException.forbidden(message)`를 던집니다. `com.cheongchun.common.api`의 `ApiResponse.success(data)`를 성공 응답에 쓰고, 생성은 HTTP `201`, 조회 및 변경은 `200`을 사용합니다. 잘못된 입력은 `ApiException.invalidRequest(message)`로 처리합니다. 전역 예외 처리기가 실패 응답을 만들어주며, 프론트는 실패 코드를 `error.code`에서 읽습니다. 사용되거나 만료된 초대 등 상태 충돌은 기존처럼 `409`입니다.
