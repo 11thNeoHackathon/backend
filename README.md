@@ -11,3 +11,27 @@
 > 감상 제출 후 보낸 사람의 To-do 조회에도 완료 상태가 반영되는지 검증해줘.
 
 빈 감상이나 ‘나중에 하기’는 대기 상태를 유지합니다. 감상을 저장하면 완료되고, 재요청해도 감상이 중복되지 않아야 합니다. 보낸 사람은 해당 감상을 읽을 수 있고, 다른 책의 참여자는 접근할 수 없습니다. 연동과 발표 전에는 [공통 시연 시나리오](docs/시연%20시나리오.md)를 사용합니다.
+
+## 서버 1 실행
+
+Java 21과 빈 PostgreSQL 데이터베이스가 필요합니다. 앱이 시작되면 Flyway가 확정 ERD의 서버 1 테이블 다섯 개를 생성합니다. 적용한 테이블은 `participant`, `participant_session`, `book`, `book_participant`, `book_invitation`입니다. `book`의 상태는 별도 컬럼 없이 책의 두 자리 연결 여부로 계산합니다.
+
+| 환경 변수 | 설정 |
+| --- | --- |
+| `DB_URL` | 기본 `jdbc:postgresql://localhost:5432/youth_exchange` |
+| `DB_USERNAME`, `DB_PASSWORD` | DB 접속 계정. 비밀번호는 환경 변수로 전달합니다. |
+| `INVITE_BASE_URL` | `/invite/{code}` 화면을 서비스하는 웹 주소. 기본 `http://localhost:8080`. |
+| `FRONTEND_ORIGIN` | 별도 프론트 오리진이 필요할 때만 허용할 정확한 오리진을 지정합니다. 프론트 요청에서 쿠키를 포함합니다. |
+| `COOKIE_SECURE` | 기본값 `true`. 로컬 HTTP 테스트에서만 `false`로 지정합니다. |
+
+```powershell
+$env:DB_PASSWORD = '로컬 DB 비밀번호'
+$env:COOKIE_SECURE = 'false'
+.\gradlew.bat bootRun
+```
+
+macOS/Linux는 `COOKIE_SECURE=false ./gradlew bootRun`을 사용합니다. 시작 후 `http://localhost:8080/swagger-ui/index.html`에서 [API 계약](src/main/resources/static/openapi/server1.yaml)을 호출할 수 있습니다. Swagger 시연은 일반 창에서 `POST /api/v1/participants` → `POST /api/v1/books` → 링크 코드 복사, 다른 브라우저 프로필에서 초대 미리보기 → 닉네임으로 수락 순으로 진행합니다. 두 브라우저 모두 `GET /api/v1/books`에서 같은 책이 `ACTIVE`인지 확인합니다.
+
+초대 링크 유효 기간은 24시간, 기기 쿠키 유효 기간은 30일입니다. 초대 링크의 UI는 프론트에서 처리하며, API에서 받은 코드로 미리보기와 수락 요청을 보냅니다. 프론트를 별도 오리진에 올릴 때도 같은 사이트의 HTTPS 배치를 권장합니다. 쿠키를 삭제하거나 쿠키가 만료된 기기의 기존 책을 복구하는 기능은 제공하지 않습니다.
+
+`./gradlew test` 또는 `.\gradlew.bat test`는 임베디드 PostgreSQL에서 공통 시나리오 1과 1-1을 확인합니다. 테스트용 DB는 별도로 설치할 필요가 없습니다.

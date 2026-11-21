@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: youth-exchange
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/youth_exchange}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:}
+  flyway:
+    enabled: true
+  mvc:
+    log-request-details: false
+
+springdoc:
+  swagger-ui:
+    url: /openapi/server1.yaml
+    disable-swagger-default-url: true
+
+app:
+  invite-base-url: ${INVITE_BASE_URL:http://localhost:8080}
+  frontend-origin: ${FRONTEND_ORIGIN:}
+  secure-cookie: ${COOKIE_SECURE:true}
