@@ -63,11 +63,17 @@ PR에서는 테스트용 MySQL 8과 Java 21로 테스트·빌드를 실행합니
    ssh-keygen -F '<서버 주소>' -f "$env:USERPROFILE\.ssh\known_hosts" | Where-Object { $_ -notmatch '^#' }
    ```
 
-4. **Settings → Secrets and variables → Actions → Variables**에서 저장소 변수 `EC2_DEPLOY_ENABLED=true`로 배포를 활성화합니다. 병합 뒤에는 **Actions → Backend CI/CD → Run workflow**에서 `main`을 선택해 다시 실행할 수 있습니다. `TargetNotConnected`가 발생하면 EC2의 SSM 등록 상태와 인스턴스 역할을 확인합니다.
+4. 구성이 끝나면 **Settings → Secrets and variables → Actions → Variables**에서 저장소 변수 `EC2_DEPLOY_ENABLED=true`로 배포를 활성화합니다. 배포가 활성화돼 있어도 필수 SSM 변수가 비어 있으면 `main` 푸시에서 경고를 남기고 배포를 건너뜁니다. 구성을 마친 뒤 **Actions → Backend CI/CD → Run workflow**에서 `main`을 선택하여 첫 자동 배포를 검증합니다. 수동 실행에서 필수 값이 비어 있으면 누락된 이름을 표시하고 실패합니다. `TargetNotConnected`가 발생하면 EC2의 SSM 등록 상태와 인스턴스 역할을 확인합니다.
 
 배포 계정은 `/home/ubuntu`에 쓰기 권한과 `sudo -n /usr/bin/systemctl restart hackathon.service` 실행 권한이 필요합니다. `app.jar` 소유자가 배포 계정과 다르면 `sudo -n /usr/bin/chown --reference=...`으로 소유권과 그룹을 유지할 수 있어야 합니다.
 
 배포는 Spring Boot와 Nginx의 `/openapi/server1.yaml`이 각각 `200`인지, Nginx를 통해 세션 쿠키 없이 호출한 `/api/v1/participants/me`가 `401`과 `SESSION_REQUIRED`를 반환하는지 확인합니다. HTTPS 확인 요청은 Nginx에 로컬로 연결하며 실제 도메인의 인증서를 검증합니다. 확인에 실패하면 직전 JAR를 복원합니다. 운영 DB 연결은 기존 `/etc/hackathon.env`를 사용합니다. 이미 적용된 Flyway 마이그레이션은 JAR 복원 시 유지되므로, 마이그레이션은 직전 애플리케이션과 호환되게 작성합니다.
+
+### HTTPS 전환 확인
+
+- [ ] Nginx에 실제 API 도메인의 인증서를 설치하고 `443`에서 HTTPS 요청에 응답하는지 확인합니다.
+- [ ] 같은 작업에서 `production`의 `EC2_HEALTH_BASE_URL`을 경로와 끝 슬래시가 없는 `https://<실제 API 도메인>`으로 설정합니다. 이 값은 HTTP를 HTTPS로 리다이렉트하기 전에 설정합니다.
+- [ ] HTTPS 주소에서 `/openapi/server1.yaml`이 `200`, 세션 쿠키 없는 `/api/v1/participants/me`가 `401 SESSION_REQUIRED`인지 확인하고, `main`에서 워크플로를 수동 실행해 배포 결과를 확인합니다.
 
 ## 배포 프론트 연동 확인
 

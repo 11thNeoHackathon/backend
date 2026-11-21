@@ -83,13 +83,6 @@ jobs:
       group: hackathon-backend-production
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: hackathon-backend
-          path: ${{ runner.temp }}/hackathon-release
       - name: Check deployment revision and SSM configuration
         id: preflight
         env:
@@ -100,18 +93,43 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          missing=()
+          for variable in EC2_AWS_REGION EC2_AWS_ROLE_ARN EC2_INSTANCE_ID; do
+            if [[ -z ${!variable} ]]; then
+              missing+=("$variable")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            message="Deployment skipped. Missing production variables: ${missing[*]}."
+            printf '%s\n' "$message" >> "$GITHUB_STEP_SUMMARY"
+            if [[ $GITHUB_EVENT_NAME == workflow_dispatch ]]; then
+              printf '::error::%s\n' "$message"
+              exit 1
+            fi
+            printf '::warning::%s\n' "$message"
+            exit 0
+          fi
+          if [[ ! $EC2_INSTANCE_ID =~ ^i-([0-9a-f]{8}|[0-9a-f]{17})$ ]]; then
+            echo '::error::EC2_INSTANCE_ID must be an EC2 instance ID.'
+            exit 1
+          fi
           current_main=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
           if [[ $current_main != "$GITHUB_SHA" ]]; then
             echo '::notice::A newer revision is on main. Deployment skipped.'
             exit 0
           fi
-          if [[ -z $EC2_AWS_REGION || -z $EC2_AWS_ROLE_ARN || ! $EC2_INSTANCE_ID =~ ^i-([0-9a-f]{8}|[0-9a-f]{17})$ ]]; then
-            echo '::error::Set EC2_AWS_REGION, EC2_AWS_ROLE_ARN, and EC2_INSTANCE_ID in the production environment.'
-            exit 1
-          fi
           aws --version
           session-manager-plugin --version
           echo 'ready=true' >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: steps.preflight.outputs.ready == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: steps.preflight.outputs.ready == 'true'
+        with:
+          name: hackathon-backend
+          path: ${{ runner.temp }}/hackathon-release
       - name: Assume the deployment role using OIDC
         if: steps.preflight.outputs.ready == 'true'
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
