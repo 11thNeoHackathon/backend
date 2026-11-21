@@ -1,0 +1,223 @@
+openapi: 3.0.3
+info:
+  title: 청춘교환 서버 1 API
+  version: 1.1.0
+  description: |
+    가입 없이 기기 쿠키로 참여자를 식별하고, 초대 링크로 두 사람의 교환일기를 연결한다.
+    성공은 success=true, data=응답 본문, error=null이다. 실패는 success=false, data=null,
+    error에 code와 message를 포함한다. 책 밖의 요청에는 책의 존재를 노출하지 않고 404를 반환한다.
+servers:
+  - url: /
+paths:
+  /api/v1/participants:
+    post:
+      summary: 참여자 시작 또는 기존 기기 재접속
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileInput'
+            example: {displayName: 지우, birthYear: 2003}
+      responses:
+        '201':
+          description: 참여자 및 기기 세션 생성
+          headers:
+            Set-Cookie:
+              schema: {type: string}
+              description: 이후 요청에 브라우저가 보내는 HttpOnly 세션 쿠키
+          content:
+            application/json:
+              example: {success: true, data: {participantId: 1, displayName: 지우, birthYear: 2003}, error: null}
+        '200':
+          description: 이미 식별된 참여자 반환
+          content:
+            application/json:
+              example: {success: true, data: {participantId: 1, displayName: 지우, birthYear: 2003}, error: null}
+        '400': {$ref: '#/components/responses/BadInput'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /api/v1/participants/me:
+    get:
+      summary: 현재 기기의 참여자 조회
+      security: [{participantCookie: []}]
+      responses:
+        '200':
+          description: 내 프로필
+          content:
+            application/json:
+              example: {success: true, data: {participantId: 1, displayName: 지우, birthYear: 2003}, error: null}
+        '401': {$ref: '#/components/responses/SessionRequired'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /api/v1/books:
+    post:
+      summary: 교환일기와 초대 링크 만들기
+      security: [{participantCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [counterpartLabel]
+              properties:
+                title: {type: string, maxLength: 100, default: 청춘 교환일기}
+                counterpartLabel: {type: string, maxLength: 30}
+            example: {counterpartLabel: 엄마}
+      responses:
+        '201':
+          description: 초대 대기 책과 발급한 링크. 응답 값을 복사하여 다른 브라우저에서 수락한다.
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  book: {bookId: 1, title: 청춘 교환일기, status: INVITE_PENDING, mySlotNo: 1, counterpartLabel: 엄마, counterpartName: null}
+                  invitation: {code: d3JsR9aQ5tY8zK0uE4mB6nV2xL1sP7Gh, inviteUrl: 'http://localhost:8080/invite/d3JsR9aQ5tY8zK0uE4mB6nV2xL1sP7Gh', expiresAt: '2026-11-22T00:00:00Z'}
+                error: null
+        '400': {$ref: '#/components/responses/BadInput'}
+        '401': {$ref: '#/components/responses/SessionRequired'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    get:
+      summary: 우리의 책장 조회
+      security: [{participantCookie: []}]
+      responses:
+        '200':
+          description: 내 참여 책만 조회
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - {bookId: 1, title: 청춘 교환일기, status: ACTIVE, mySlotNo: 1, counterpartLabel: 엄마, counterpartName: 은주}
+                error: null
+        '401': {$ref: '#/components/responses/SessionRequired'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /api/v1/books/{bookId}:
+    parameters:
+      - in: path
+        name: bookId
+        required: true
+        schema: {type: integer, format: int64, minimum: 1}
+        example: 1
+    get:
+      summary: 내 책 한 권 조회
+      security: [{participantCookie: []}]
+      responses:
+        '200':
+          description: 책의 연결 상태와 상대 정보
+          content:
+            application/json:
+              example: {success: true, data: {bookId: 1, title: 청춘 교환일기, status: ACTIVE, mySlotNo: 1, counterpartLabel: 엄마, counterpartName: 은주}, error: null}
+        '400': {$ref: '#/components/responses/BadInput'}
+        '401': {$ref: '#/components/responses/SessionRequired'}
+        '404':
+          description: 없는 책 또는 내 책이 아님
+          content:
+            application/json:
+              example: {success: false, data: null, error: {code: BOOK_NOT_FOUND, message: 책을 찾을 수 없어요.}}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /api/v1/invitations/{code}:
+    parameters:
+      - $ref: '#/components/parameters/InviteCode'
+    get:
+      summary: 초대 링크 미리보기
+      responses:
+        '200':
+          description: 수락 전 화면에 표시할 정보 또는 이미 참여 중인 책
+          content:
+            application/json:
+              examples:
+                available:
+                  value: {success: true, data: {status: AVAILABLE, inviterName: 지우, bookTitle: 청춘 교환일기, expiresAt: '2026-11-22T00:00:00Z', bookId: null}, error: null}
+                linked:
+                  value: {success: true, data: {status: LINKED, inviterName: 지우, bookTitle: 청춘 교환일기, expiresAt: '2026-11-22T00:00:00Z', bookId: 1}, error: null}
+        '404': {$ref: '#/components/responses/InviteNotFound'}
+        '409': {$ref: '#/components/responses/InviteConflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /api/v1/invitations/{code}/accept:
+    parameters:
+      - $ref: '#/components/parameters/InviteCode'
+    post:
+      summary: 닉네임으로 초대 수락
+      description: 새 기기는 displayName을 입력한다. 이미 세션이 있으면 기존 참여자로 연결하며, 이미 수락한 기기의 재요청은 기존 책을 반환한다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: {type: string, maxLength: 50}
+                birthYear: {type: integer, minimum: 1900}
+                counterpartLabel: {type: string, maxLength: 30, default: 가족}
+            example: {displayName: 은주, birthYear: 1976, counterpartLabel: 지우}
+      responses:
+        '201':
+          description: 두 번째 참여자 연결. 새 기기에는 기기 쿠키도 발급한다.
+          content:
+            application/json:
+              example: {success: true, data: {bookId: 1, title: 청춘 교환일기, status: ACTIVE, mySlotNo: 2, counterpartLabel: 지우, counterpartName: 지우}, error: null}
+        '200':
+          description: 이미 수락한 같은 기기의 재요청
+          content:
+            application/json:
+              example: {success: true, data: {bookId: 1, title: 청춘 교환일기, status: ACTIVE, mySlotNo: 2, counterpartLabel: 지우, counterpartName: 지우}, error: null}
+        '400': {$ref: '#/components/responses/BadInput'}
+        '404': {$ref: '#/components/responses/InviteNotFound'}
+        '409': {$ref: '#/components/responses/InviteConflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+components:
+  securitySchemes:
+    participantCookie:
+      type: apiKey
+      in: cookie
+      name: participant_session
+  parameters:
+    InviteCode:
+      in: path
+      name: code
+      required: true
+      description: 예시 대신 책 생성 응답으로 받은 실제 code를 사용한다.
+      schema: {type: string, minLength: 32, maxLength: 32}
+      example: d3JsR9aQ5tY8zK0uE4mB6nV2xL1sP7Gh
+  schemas:
+    ProfileInput:
+      type: object
+      required: [displayName]
+      properties:
+        displayName: {type: string, minLength: 1, maxLength: 50}
+        birthYear: {type: integer, minimum: 1900, description: 현재 연도 이하의 정수}
+  responses:
+    BadInput:
+      description: 필수 값 누락 또는 입력 형식 오류
+      content:
+        application/json:
+          example: {success: false, data: null, error: {code: INVALID_REQUEST, message: 닉네임 값을 입력해 주세요.}}
+    SessionRequired:
+      description: 유효한 기기 세션이 없음
+      content:
+        application/json:
+          example: {success: false, data: null, error: {code: SESSION_REQUIRED, message: 먼저 닉네임을 입력해 주세요.}}
+    InviteNotFound:
+      description: 없는 초대 코드
+      content:
+        application/json:
+          example: {success: false, data: null, error: {code: INVITATION_NOT_FOUND, message: 초대 링크를 찾을 수 없어요.}}
+    InviteConflict:
+      description: 사용·만료·취소된 초대 또는 본인 초대 수락
+      content:
+        application/json:
+          examples:
+            used:
+              value: {success: false, data: null, error: {code: INVITATION_USED, message: 이미 다른 기기가 이 초대를 수락했어요.}}
+            expired:
+              value: {success: false, data: null, error: {code: INVITATION_EXPIRED, message: 초대 링크가 만료됐어요.}}
+            selfAccept:
+              value: {success: false, data: null, error: {code: SELF_INVITATION, message: 내가 만든 초대는 수락할 수 없어요.}}
+            revoked:
+              value: {success: false, data: null, error: {code: INVITATION_REVOKED, message: 사용할 수 없는 초대 링크예요.}}
+    InternalError:
+      description: 예상하지 못한 서버 오류
+      content:
+        application/json:
+          example: {success: false, data: null, error: {code: INTERNAL_ERROR, message: 요청을 처리하지 못했어요.}}

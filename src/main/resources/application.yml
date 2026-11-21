@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: youth-exchange
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      connection-init-sql: "SET time_zone = '+00:00'"
+  flyway:
+    enabled: true
+  mvc:
+    log-request-details: false
+
+springdoc:
+  swagger-ui:
+    url: /openapi/server1.yaml
+    disable-swagger-default-url: true
+
+app:
+  invite-base-url: ${INVITE_BASE_URL:http://localhost:8080}
+  frontend-origin: ${FRONTEND_ORIGIN:}
+  secure-cookie: ${COOKIE_SECURE:true}
