@@ -36,7 +36,13 @@ RDS에서 `VERIFY_IDENTITY`를 사용할 때는 [RDS 루트 CA](https://docs.aws
 
 초대 링크 유효 기간은 24시간, 기기 쿠키 유효 기간은 30일입니다. 초대 링크의 UI는 프론트에서 처리하며, API에서 받은 코드로 미리보기와 수락 요청을 보냅니다. 프론트를 별도 오리진에 올릴 때도 같은 사이트의 HTTPS 배치를 권장합니다. 쿠키를 삭제하거나 쿠키가 만료된 기기의 기존 책을 복구하는 기능은 제공하지 않습니다.
 
-통합 테스트는 실제 MySQL 8의 별도 테스트 데이터베이스를 사용합니다. 운영용 `DB_*`와 별개로 `TEST_DB_URL`(예: `jdbc:mysql://localhost:3306/hackathon_test`), `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`를 설정한 후 `./gradlew test` 또는 `.\gradlew.bat test`를 실행합니다. 테스트는 공통 시나리오 1, 1-1, 5-1 및 제약 조건을 확인합니다.
+통합 테스트는 실제 MySQL 8의 별도 테스트 데이터베이스를 사용합니다. 운영용 `DB_*`와 별개로 `TEST_DB_URL`(예: `jdbc:mysql://localhost:3306/hackathon_test`), `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`를 설정한 후 `./gradlew test` 또는 `.\gradlew.bat test`를 실행합니다. GitHub Actions는 PR과 `main` 푸시에서 테스트용 MySQL을 띄워 Java 21로 `test bootJar`를 실행합니다.
+
+## 배포 프론트 연동 확인
+
+- 프론트와 API가 다른 오리진이면 `FRONTEND_ORIGIN`에 경로 없이 프론트의 정확한 오리진을 설정합니다. 예를 들어 `https://app.example.com`입니다. 프론트 요청은 `credentials: 'include'`를 사용하고, API는 설정한 오리진의 `GET`, `POST`, `PUT`, `DELETE`를 허용합니다.
+- 브라우저에서 초대 수락 응답으로 `participant_session` 쿠키가 저장되는지, 이어서 `GET /api/v1/participants/me`에 쿠키가 실려 `200`이 되는지 확인합니다. 현재 `SameSite=Lax`는 `https://app.example.com`과 `https://api.example.com`처럼 같은 사이트인 배치에 사용할 수 있습니다. 서로 다른 사이트라면 `credentials: 'include'`로도 `Lax` 쿠키가 전송되지 않으므로, 배포 도메인과 쿠키 방식을 확정한 뒤 실제 브라우저에서 확인합니다.
+- 서버 2 연동 후 배포된 프론트에서 이야기·감상 저장(`PUT`)과 빈 챕터 삭제(`DELETE`)를 실행합니다. 브라우저에서 `OPTIONS` 사전 요청의 `Access-Control-Allow-Origin`, 허용 메서드, 쿠키 허용 여부와 실제 요청 결과를 확인합니다. 로컬 테스트의 사전 요청 검증과 배포 프론트 연동 검증은 별개입니다.
 
 ## 다른 API에서 공통 컴포넌트 사용
 

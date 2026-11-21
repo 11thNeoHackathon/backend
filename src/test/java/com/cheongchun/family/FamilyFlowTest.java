@@ -13,8 +13,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.sql.SQLException;
 import java.time.Duration;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -30,12 +30,16 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "app.frontend-origin=https://frontend.example.test")
 @Import(FamilyFlowTest.TeamApiProbe.class)
 class FamilyFlowTest {
     private static final HttpClient http = HttpClient.newHttpClient();
+    private static final String FRONTEND_ORIGIN = "https://frontend.example.test";
 
     @LocalServerPort int port;
     @Autowired JdbcClient jdbc;
@@ -162,6 +166,22 @@ class FamilyFlowTest {
     }
 
     @Test
+    void corsPreflightAllowsPutAndDeleteFromConfiguredFrontendOnly() throws Exception {
+        for (String method : List.of("PUT", "DELETE")) {
+            var allowed = preflight(FRONTEND_ORIGIN, method);
+            assertThat(allowed.statusCode()).isEqualTo(200);
+            assertThat(allowed.headers().firstValue("Access-Control-Allow-Origin")).contains(FRONTEND_ORIGIN);
+            assertThat(allowed.headers().firstValue("Access-Control-Allow-Credentials")).contains("true");
+            assertThat(allowed.headers().firstValue("Access-Control-Allow-Methods").orElseThrow())
+                    .contains("GET", "POST", "PUT", "DELETE");
+        }
+
+        var rejected = preflight("https://other.example.test", "PUT");
+        assertThat(rejected.statusCode()).isEqualTo(403);
+        assertThat(rejected.headers().firstValue("Access-Control-Allow-Origin")).isEmpty();
+    }
+
+    @Test
     void mysqlPreservesSeatAndCrossBookConstraintsAndCodeCase() throws Exception {
         var creator = post("/participants", null, "{\"displayName\":\"초대자\"}");
         long creatorId = ((Number) value(creator, "$.data.participantId")).longValue();
@@ -191,6 +211,16 @@ class FamilyFlowTest {
                 INSERT INTO book_participant (book_id, participant_id, slot_no, counterpart_label)
                 VALUES (:bookId, :participantId, :slotNo, '가족')
                 """).param("bookId", bookId).param("participantId", participantId).param("slotNo", slotNo).update();
+    }
+
+    private HttpResponse<String> preflight(String origin, String method) throws Exception {
+        var request = HttpRequest.newBuilder(uri("/api/v1/test-team-access/1"))
+                .timeout(Duration.ofSeconds(15))
+                .header("Origin", origin)
+                .header("Access-Control-Request-Method", method)
+                .header("Access-Control-Request-Headers", "content-type")
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody()).build();
+        return http.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private static void assertMysqlError(int errorCode, Runnable statement) {
@@ -262,7 +292,8 @@ class FamilyFlowTest {
             this.bookAccessService = bookAccessService;
         }
 
-        @GetMapping("/api/v1/test-team-access/{bookId}")
+        @RequestMapping(path = "/api/v1/test-team-access/{bookId}",
+                method = {RequestMethod.GET, RequestMethod.PUT, RequestMethod.DELETE})
         ApiResponse<BookParticipant> member(@PathVariable long bookId) {
             return ApiResponse.success(bookAccessService.requireParticipant(bookId, participantContext.currentParticipantId()));
         }

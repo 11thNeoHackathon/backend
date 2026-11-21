@@ -27,7 +27,7 @@ public class YouthExchangeApplication {
                 if (!frontendOrigin.isBlank()) {
                     registry.addMapping("/api/v1/**")
                             .allowedOrigins(frontendOrigin)
-                            .allowedMethods("GET", "POST")
+                            .allowedMethods("GET", "POST", "PUT", "DELETE")
                             .allowedHeaders("Content-Type")
                             .allowCredentials(true);
                 }
