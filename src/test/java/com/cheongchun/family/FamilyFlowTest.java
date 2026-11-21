@@ -3,6 +3,11 @@ package com.cheongchun.family;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.cheongchun.common.api.ApiException;
+import com.cheongchun.common.api.ApiResponse;
+import com.cheongchun.common.auth.BookAccessService;
+import com.cheongchun.common.auth.BookParticipant;
+import com.cheongchun.common.auth.ParticipantContext;
 import com.jayway.jsonpath.JsonPath;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -11,17 +16,24 @@ import java.net.http.HttpResponse;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestComponent;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(FamilyFlowTest.TeamApiProbe.class)
 class FamilyFlowTest {
     private static final HttpClient http = HttpClient.newHttpClient();
 
@@ -41,6 +53,8 @@ class FamilyFlowTest {
                 {"displayName":"엄마", "birthYear":1976}
                 """);
         assertThat(parent.statusCode()).isEqualTo(201);
+        Map<String, Object> parentBody = value(parent, "$");
+        assertThat(parentBody).containsEntry("success", true).containsEntry("error", null).containsKey("data");
         assertThat(parent.headers().firstValue("Set-Cookie").orElseThrow())
                 .contains("HttpOnly", "Secure", "SameSite=Lax", "Max-Age=");
         String parentCookie = cookie(parent);
@@ -94,8 +108,8 @@ class FamilyFlowTest {
 
     @Test
     void malformedRequestsAndExpiredLinksHaveDefinedErrors() throws Exception {
-        assertThat(get("/books", null).statusCode()).isEqualTo(401);
-        assertThat(post("/participants", null, "{broken").statusCode()).isEqualTo(400);
+        assertError(get("/books", null), 401, "SESSION_REQUIRED");
+        assertError(post("/participants", null, "{broken"), 400, "INVALID_REQUEST");
         assertThat(post("/participants", null, "{\"displayName\":\" \"}").statusCode()).isEqualTo(400);
         assertThat(get("/invitations/nonexistent", null).statusCode()).isEqualTo(404);
         String creator = cookie(post("/participants", null, "{\"displayName\":\"초대자\"}"));
@@ -106,6 +120,33 @@ class FamilyFlowTest {
         assertThat(response.statusCode()).isEqualTo(409);
         assertThat(response.body()).contains("INVITATION_EXPIRED");
         assertThat(get("/books/not-a-number", creator).statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void commonComponentsWorkInAnotherController() throws Exception {
+        var member = post("/participants", null, "{\"displayName\":\"작성자\"}");
+        String memberCookie = cookie(member);
+        long participantId = ((Number) value(member, "$.data.participantId")).longValue();
+        long bookId = ((Number) value(createBook(memberCookie, "가족"), "$.data.book.bookId")).longValue();
+        String route = "/test-team-access/" + bookId;
+        var success = get(route, memberCookie);
+        assertThat(success.statusCode()).isEqualTo(200);
+        assertThat(((Number) value(success, "$.data.participantId")).longValue()).isEqualTo(participantId);
+        assertThat((Boolean) value(success, "$.success")).isTrue();
+
+        String outsider = cookie(post("/participants", null, "{\"displayName\":\"다른 사람\"}"));
+        var nonMember = get(route, outsider);
+        var absentBook = get("/test-team-access/" + Long.MAX_VALUE, memberCookie);
+        assertError(nonMember, 404, "BOOK_NOT_FOUND");
+        assertThat(absentBook.statusCode()).isEqualTo(404);
+        assertThat(absentBook.body()).isEqualTo(nonMember.body());
+        assertError(get(route + "/forbidden", memberCookie), 403, "FORBIDDEN");
+        assertError(get(route + "/unexpected", memberCookie), 500, "INTERNAL_ERROR");
+        assertError(get(route, null), 401, "SESSION_REQUIRED");
+
+        jdbc.sql("UPDATE participant_session SET expires_at = CURRENT_TIMESTAMP(6) WHERE participant_id = :id")
+                .param("id", participantId).update();
+        assertError(get(route, memberCookie), 401, "SESSION_REQUIRED");
     }
 
     @Test
@@ -189,6 +230,15 @@ class FamilyFlowTest {
         return JsonPath.read(response.body(), path);
     }
 
+    private static void assertError(HttpResponse<String> response, int status, String code) {
+        assertThat(response.statusCode()).isEqualTo(status);
+        Map<String, Object> body = value(response, "$");
+        assertThat(body).containsOnlyKeys("success", "data", "error")
+                .containsEntry("success", false).containsEntry("data", null);
+        assertThat((String) value(response, "$.error.code")).isEqualTo(code);
+        assertThat((String) value(response, "$.error.message")).isNotBlank();
+    }
+
     private static String cookie(HttpResponse<String> response) {
         return response.headers().firstValue("Set-Cookie").orElseThrow().split(";", 2)[0];
     }
@@ -199,5 +249,34 @@ class FamilyFlowTest {
             throw new IllegalStateException("Set " + name + " for an isolated MySQL integration-test database");
         }
         return value;
+    }
+
+    @RestController
+    @TestComponent
+    static class TeamApiProbe {
+        private final ParticipantContext participantContext;
+        private final BookAccessService bookAccessService;
+
+        TeamApiProbe(ParticipantContext participantContext, BookAccessService bookAccessService) {
+            this.participantContext = participantContext;
+            this.bookAccessService = bookAccessService;
+        }
+
+        @GetMapping("/api/v1/test-team-access/{bookId}")
+        ApiResponse<BookParticipant> member(@PathVariable long bookId) {
+            return ApiResponse.success(bookAccessService.requireParticipant(bookId, participantContext.currentParticipantId()));
+        }
+
+        @GetMapping("/api/v1/test-team-access/{bookId}/forbidden")
+        ApiResponse<Void> forbidden(@PathVariable long bookId) {
+            bookAccessService.requireParticipant(bookId, participantContext.currentParticipantId());
+            throw ApiException.forbidden("이 작업을 할 권한이 없어요.");
+        }
+
+        @GetMapping("/api/v1/test-team-access/{bookId}/unexpected")
+        ApiResponse<Void> unexpected(@PathVariable long bookId) {
+            bookAccessService.requireParticipant(bookId, participantContext.currentParticipantId());
+            throw new IllegalStateException("Test-only unexpected failure");
+        }
     }
 }

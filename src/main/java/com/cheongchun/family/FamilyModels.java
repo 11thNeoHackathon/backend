@@ -9,7 +9,6 @@ final class FamilyModels {
     record CreateBookInput(String title, String counterpartLabel) {}
     record AcceptInput(String displayName, Integer birthYear, String counterpartLabel) {}
 
-    record Participant(long participantId, String displayName, Integer birthYear) {}
     record BookView(long bookId, String title, String status, int mySlotNo, String counterpartLabel,
                     String counterpartName) {}
     record InvitationLink(String code, String inviteUrl, Instant expiresAt) {}
