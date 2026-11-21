@@ -1,0 +1,33 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StartSshSessionOnDeploymentInstance",
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": [
+        "arn:aws:ec2:ap-southeast-2:111122223333:instance/i-0123456789abcdef0",
+        "arn:aws:ssm:ap-southeast-2::document/AWS-StartSSHSession"
+      ],
+      "Condition": {
+        "BoolIfExists": {
+          "ssm:SessionDocumentAccessCheck": "true"
+        }
+      }
+    },
+    {
+      "Sid": "UseAndTerminateOwnedSessions",
+      "Effect": "Allow",
+      "Action": [
+        "ssmmessages:OpenDataChannel",
+        "ssm:TerminateSession"
+      ],
+      "Resource": "arn:aws:ssm:ap-southeast-2:111122223333:session/*",
+      "Condition": {
+        "StringEquals": {
+          "ssm:resourceTag/aws:ssmmessages:session-id": "${aws:userid}"
+        }
+      }
+    }
+  ]
+}

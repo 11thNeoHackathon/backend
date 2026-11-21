@@ -1,9 +1,10 @@
-name: Backend CI
+name: Backend CI/CD
 
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -36,9 +37,118 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: gradle
+      - name: Test EC2 release and rollback
+        run: |
+          bash -n deploy/ec2/ssh-deploy.sh
+          bash deploy/ec2/test-release.sh
       - name: Test and build with MySQL
         env:
           TEST_DB_URL: 'jdbc:mysql://127.0.0.1:${{ job.services.mysql.ports[3306] }}/hackathon_test?sslMode=DISABLED&allowPublicKeyRetrieval=true'
           TEST_DB_USERNAME: hackathon_ci
           TEST_DB_PASSWORD: ci-only-test-password
         run: ./gradlew --no-daemon test bootJar
+      - name: Stage the verified JAR
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t jars < <(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar')
+          if (( ${#jars[@]} != 1 )); then
+            echo 'Expected exactly one executable Spring Boot JAR.' >&2
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/hackathon-release"
+          cp -- "${jars[0]}" "$RUNNER_TEMP/hackathon-release/app.jar"
+          (cd "$RUNNER_TEMP/hackathon-release" && sha256sum app.jar > app.jar.sha256)
+      - name: Upload the verified JAR
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hackathon-backend
+          path: ${{ runner.temp }}/hackathon-release/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+
+  deploy-ec2:
+    needs: mysql-test-and-build
+    if: github.ref == 'refs/heads/main' && vars.EC2_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    concurrency:
+      group: hackathon-backend-production
+      cancel-in-progress: false
+    steps:
+      - name: Check deployment revision and SSM configuration
+        id: preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EC2_AWS_REGION: ${{ vars.EC2_AWS_REGION }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          AWS_ACCESS_KEY_ID_PRESENT: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+          AWS_SECRET_ACCESS_KEY_PRESENT: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          for variable in EC2_AWS_REGION EC2_INSTANCE_ID; do
+            if [[ -z ${!variable} ]]; then
+              missing+=("$variable")
+            fi
+          done
+          if [[ $AWS_ACCESS_KEY_ID_PRESENT != true ]]; then
+            missing+=(AWS_ACCESS_KEY_ID)
+          fi
+          if [[ $AWS_SECRET_ACCESS_KEY_PRESENT != true ]]; then
+            missing+=(AWS_SECRET_ACCESS_KEY)
+          fi
+          if (( ${#missing[@]} > 0 )); then
+            message="Deployment skipped. Missing production settings: ${missing[*]}."
+            printf '%s\n' "$message" >> "$GITHUB_STEP_SUMMARY"
+            if [[ $GITHUB_EVENT_NAME == workflow_dispatch ]]; then
+              printf '::error::%s\n' "$message"
+              exit 1
+            fi
+            printf '::warning::%s\n' "$message"
+            exit 0
+          fi
+          if [[ ! $EC2_INSTANCE_ID =~ ^i-([0-9a-f]{8}|[0-9a-f]{17})$ ]]; then
+            echo '::error::EC2_INSTANCE_ID must be an EC2 instance ID.'
+            exit 1
+          fi
+          current_main=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          if [[ $current_main != "$GITHUB_SHA" ]]; then
+            echo '::notice::A newer revision is on main. Deployment skipped.'
+            exit 0
+          fi
+          aws --version
+          session-manager-plugin --version
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: steps.preflight.outputs.ready == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: steps.preflight.outputs.ready == 'true'
+        with:
+          name: hackathon-backend
+          path: ${{ runner.temp }}/hackathon-release
+      - name: Configure the deployment IAM user credentials
+        if: steps.preflight.outputs.ready == 'true'
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: ${{ vars.EC2_AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Deploy the tested main revision
+        if: steps.preflight.outputs.ready == 'true'
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+          EC2_HEALTH_BASE_URL: ${{ vars.EC2_HEALTH_BASE_URL }}
+        shell: bash
+        run: bash deploy/ec2/ssh-deploy.sh "$RUNNER_TEMP/hackathon-release" "$GITHUB_SHA"
