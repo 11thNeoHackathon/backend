@@ -4,3 +4,7 @@ build/
 *.iml
 .env
 .env.*
+.DS_Store
+.local/
+.run/Local.run.xml
+config/application-local.properties

@@ -38,6 +38,8 @@ RDS에서 `VERIFY_IDENTITY`를 사용할 때는 [RDS 루트 CA](https://docs.aws
 
 통합 테스트는 실제 MySQL 8의 별도 테스트 데이터베이스를 사용합니다. 운영용 `DB_*`와 별개로 `TEST_DB_URL`(예: `jdbc:mysql://localhost:3306/hackathon_test`), `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`를 설정한 후 `./gradlew test` 또는 `.\gradlew.bat test`를 실행합니다. GitHub Actions는 PR과 `main` 푸시에서 테스트용 MySQL을 띄워 Java 21로 `test bootJar`를 실행합니다.
 
+같은 MySQL 데이터베이스에 V1 가족 연결, V2 공유 챕터·이야기, V3 미션 감상 마이그레이션이 순서대로 적용됩니다. Swagger UI에서 `가족 연결`과 `챕터와 이야기` 문서를 선택할 수 있습니다. 서버 2의 요청 순서와 공개 규칙은 [서버 2 구현](docs/서버2%20구현.md)을 참고하세요. 두 사람의 동시 감상 제출과 공개된 미션 문구 변경도 통합 테스트에서 확인합니다.
+
 ## 배포 프론트 연동 확인
 
 - 프론트와 API가 다른 오리진이면 `FRONTEND_ORIGIN`에 경로 없이 프론트의 정확한 오리진을 설정합니다. 예를 들어 `https://app.example.com`입니다. 프론트 요청은 `credentials: 'include'`를 사용하고, API는 설정한 오리진의 `GET`, `POST`, `PUT`, `DELETE`를 허용합니다.

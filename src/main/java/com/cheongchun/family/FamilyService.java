@@ -60,6 +60,7 @@ class FamilyService {
         String label = requiredText(input.counterpartLabel(), 30, "상대 호칭");
         long bookId = store.createBook(creatorId, title);
         store.addMember(bookId, creatorId, 1, label);
+        store.createDefaultChapter(bookId, creatorId);
         String code = randomToken(24);
         Instant expiresAt = clock.instant().plus(INVITE_LIFETIME);
         store.createInvite(bookId, creatorId, code, expiresAt);

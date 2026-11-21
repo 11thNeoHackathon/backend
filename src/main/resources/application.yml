@@ -16,6 +16,11 @@ springdoc:
   swagger-ui:
     url: /openapi/server1.yaml
     disable-swagger-default-url: true
+    urls:
+      - name: 가족 연결
+        url: /openapi/server1.yaml
+      - name: 챕터와 이야기
+        url: /openapi/server2.json
 
 app:
   invite-base-url: ${INVITE_BASE_URL:http://localhost:8080}

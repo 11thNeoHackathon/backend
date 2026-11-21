@@ -58,6 +58,11 @@ class FamilyStore {
                 .param("counterpartLabel", counterpartLabel).update();
     }
 
+    void createDefaultChapter(long bookId, long creatorId) {
+        jdbc.sql("INSERT INTO chapter(book_id, name, created_by) VALUES (:bookId, '초등학생 시절', :creatorId)")
+                .param("bookId", bookId).param("creatorId", creatorId).update();
+    }
+
     List<BookView> listBooks(long participantId) {
         return jdbc.sql(BOOKS_FOR_PARTICIPANT + " ORDER BY b.id DESC")
                 .param("participantId", participantId).query(FamilyStore::mapBook).list();

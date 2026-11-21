@@ -148,7 +148,7 @@ class FamilyFlowTest {
         assertError(get(route + "/unexpected", memberCookie), 500, "INTERNAL_ERROR");
         assertError(get(route, null), 401, "SESSION_REQUIRED");
 
-        jdbc.sql("UPDATE participant_session SET expires_at = CURRENT_TIMESTAMP(6) WHERE participant_id = :id")
+        jdbc.sql("UPDATE participant_session SET expires_at = CURRENT_TIMESTAMP(6) - INTERVAL 1 MINUTE WHERE participant_id = :id")
                 .param("id", participantId).update();
         assertError(get(route, memberCookie), 401, "SESSION_REQUIRED");
     }
