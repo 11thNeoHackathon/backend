@@ -2,6 +2,16 @@
 
 가족 연결, 관계별 책, 챕터, 미션, 감상을 제공하는 Spring 백엔드입니다.
 
+## 기술 스택
+
+| 영역 | 사용 기술 | 용도 |
+| --- | --- | --- |
+| 언어·프레임워크 | Java 21, Spring Boot 4.1.2, Spring Web MVC | REST API 구현 |
+| 데이터 | Spring JDBC (`JdbcClient`), MySQL 8, Flyway | 데이터 접근 및 스키마 마이그레이션 |
+| API 문서 | springdoc-openapi 3.2.0, Swagger UI | API 명세와 요청 테스트 |
+| 빌드·테스트 | Gradle Wrapper, JUnit Platform, Spring Boot Test, MySQL 8 | 빌드 및 통합 테스트 |
+| 배포·운영 | AWS EC2, Amazon RDS for MySQL, Nginx, GitHub Actions, AWS Systems Manager | HTTPS 요청 처리, 데이터베이스 운영 및 자동 배포 |
+
 ## 개발 기준
 
 공통 작업 절차는 [AGENTS.md](AGENTS.md)를 따릅니다. 경로·메서드·요청·정상 응답·기본 오류를 Swagger에 먼저 명세하고, API 변경과 함께 갱신합니다. 로그인 도입은 별도로 결정하며, 책 접근과 감상 작성 권한은 서버에서 확인합니다.
