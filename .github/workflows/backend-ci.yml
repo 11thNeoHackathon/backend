@@ -1,0 +1,44 @@
+name: Backend CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  mysql-test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0.46
+        env:
+          MYSQL_ROOT_PASSWORD: ci-only-root-password
+          MYSQL_DATABASE: hackathon_test
+          MYSQL_USER: hackathon_ci
+          MYSQL_PASSWORD: ci-only-test-password
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --silent"
+          --health-interval=5s
+          --health-timeout=4s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Test and build with MySQL
+        env:
+          TEST_DB_URL: 'jdbc:mysql://127.0.0.1:${{ job.services.mysql.ports[3306] }}/hackathon_test?sslMode=DISABLED&allowPublicKeyRetrieval=true'
+          TEST_DB_USERNAME: hackathon_ci
+          TEST_DB_PASSWORD: ci-only-test-password
+        run: ./gradlew --no-daemon test bootJar
